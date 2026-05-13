@@ -95,15 +95,11 @@ class OpenAICompatibleClient(BaseLLMClient):
             model=model_config.model,
             messages=self.message_history,
             tools=tool_schemas if tool_schemas else openai.NOT_GIVEN,
-            temperature=model_config.temperature
-            if "o3" not in model_config.model
-            and "o4-mini" not in model_config.model
-            and "gpt-5" not in model_config.model
-            else openai.NOT_GIVEN,
+            temperature=model_config.temperature,
             top_p=model_config.top_p,
-            extra_headers=extra_headers if extra_headers else None,
             n=1,
             **token_params,
+            extra_body={"thinking": {"type": "disabled"}},
         )
 
     @override
@@ -152,15 +148,19 @@ class OpenAICompatibleClient(BaseLLMClient):
         if choice.message.tool_calls:
             tool_calls = []
             for tool_call in choice.message.tool_calls:
+                try:
+                    arguments = (
+                        json.loads(tool_call.function.arguments)
+                        if tool_call.function.arguments
+                        else {}
+                    )
+                except json.JSONDecodeError:
+                    arguments = {}
                 tool_calls.append(
                     ToolCall(
                         name=tool_call.function.name,
                         call_id=tool_call.id,
-                        arguments=(
-                            json.loads(tool_call.function.arguments)
-                            if tool_call.function.arguments
-                            else {}
-                        ),
+                        arguments=arguments,
                     )
                 )
 
