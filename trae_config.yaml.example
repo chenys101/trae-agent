@@ -8,13 +8,31 @@ agents:
             - str_replace_based_edit_tool
             - sequentialthinking
             - task_done
+    rca_agent:
+        model: trae_agent_model
+        max_steps: 5
+        codebase: G:/workspace_master
+        tools:
+            - business_analysis
+            - log_analysis
+            - task_done
 allow_mcp_servers:
     - playwright
+    - volc_tls
 mcp_servers:
     playwright:
         command: npx
         args:
             - "@playwright/mcp@0.0.27"
+    volc_tls:
+        command: python
+        args:
+            - -m
+            - mcp_servers.volc_tls.main
+        env:
+            VOLC_ACCESS_KEY: your_volc_access_key
+            VOLC_SECRET_KEY: your_volc_secret_key
+            VOLC_REGION: cn-beijing
 lakeview:
     model: lakeview_model
 

@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -140,7 +141,8 @@ def generate_agent_step_table(agent_step: AgentStep) -> Table:
 
     # Add LLM response row
     if agent_step.llm_response and agent_step.llm_response.content:
-        table.add_row("LLM Response", f"💬 {agent_step.llm_response.content}")
+        escaped_content = escape(agent_step.llm_response.content)
+        table.add_row("LLM Response", f"💬 {escaped_content}")
 
     # Add tool calls row
     if agent_step.tool_calls:
@@ -157,15 +159,20 @@ def generate_agent_step_table(agent_step: AgentStep) -> Table:
                 if tool_result.call_id == tool_call.call_id:
                     tool_result_str = tool_result.result or ""
                     break
-            tool_call_table.add_row(f"{tool_call.arguments}", f"{tool_result_str}")
+            # Escape special characters in tool arguments and results
+            escaped_args = escape(str(tool_call.arguments))
+            escaped_result = escape(tool_result_str)
+            tool_call_table.add_row(escaped_args, escaped_result)
             table.add_row(tool_call.name, tool_call_table)
 
     # Add reflection row
     if agent_step.reflection:
-        table.add_row("Reflection", f"💭 {agent_step.reflection}")
+        escaped_reflection = escape(agent_step.reflection)
+        table.add_row("Reflection", f"💭 {escaped_reflection}")
 
     # Add error row
     if agent_step.error:
-        table.add_row("Error", f"❌ {agent_step.error}")
+        escaped_error = escape(agent_step.error)
+        table.add_row("Error", f"❌ {escaped_error}")
 
     return table

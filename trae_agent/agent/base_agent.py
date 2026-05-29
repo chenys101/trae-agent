@@ -163,6 +163,23 @@ class BaseAgent(ABC):
             while step_number <= self._max_steps:
                 step = AgentStep(step_number=step_number, state=AgentStepState.THINKING)
                 try:
+                    # 当接近上限时，提醒 LLM
+                    if step_number == self._max_steps - 2:
+                        warning_message = (
+                            f"[WARNING] Reaching step limit ({self._max_steps} steps). "
+                            "Please focus on gathering critical information or "
+                            "provide a summary of findings so far and ask for user input if needed."
+                        )
+                        messages.append(LLMMessage(role="user", content=warning_message))
+                    elif step_number == self._max_steps:
+                        final_message = (
+                            f"[FINAL STEP] This is the last step ({self._max_steps}). "
+                            "Please provide a summary of your investigation so far, "
+                            "what you've found, what information is still missing, "
+                            "and suggest what the user should provide or do next."
+                        )
+                        messages.append(LLMMessage(role="user", content=final_message))
+                    
                     messages = await self._run_llm_step(step, messages, execution)
                     await self._finalize_step(
                         step, messages, execution
@@ -177,7 +194,11 @@ class BaseAgent(ABC):
                     await self._finalize_step(step, messages, execution)
                     break
             if step_number > self._max_steps and not execution.success:
-                execution.final_result = "Task execution exceeded maximum steps without completion."
+                execution.final_result = (
+                    f"Investigation reached the step limit ({self._max_steps} steps). "
+                    "Please review the trajectory for what was found so far, "
+                    "or restart the analysis with more specific information (order ID, trace ID, error messages, etc.)."
+                )
                 execution.agent_state = AgentState.ERROR
 
         except Exception as e:
@@ -324,29 +345,32 @@ class BaseAgent(ABC):
             ]
             return messages
 
-        step.state = AgentStepState.CALLING_TOOL
-        step.tool_calls = tool_calls
-        self._update_cli_console(step)
-
-        if self._model_config.parallel_tool_calls:
-            tool_results = await self._tool_caller.parallel_tool_call(tool_calls)
-        else:
-            tool_results = await self._tool_caller.sequential_tool_call(tool_calls)
-        step.tool_results = tool_results
-        self._update_cli_console(step)
-        for tool_result in tool_results:
-            # Add tool result to conversation
-            message = LLMMessage(role="user", tool_result=tool_result)
-            messages.append(message)
-
-        reflection = self.reflect_on_result(tool_results)
-        if reflection:
-            step.state = AgentStepState.REFLECTING
-            step.reflection = reflection
-
-            # Display reflection
+        try:
+            step.state = AgentStepState.CALLING_TOOL
+            step.tool_calls = tool_calls
             self._update_cli_console(step)
 
-            messages.append(LLMMessage(role="assistant", content=reflection))
+            if self._model_config.parallel_tool_calls:
+                tool_results = await self._tool_caller.parallel_tool_call(tool_calls)
+            else:
+                tool_results = await self._tool_caller.sequential_tool_call(tool_calls)
+            step.tool_results = tool_results
+            self._update_cli_console(step)
 
-        return messages
+            for tool_result in tool_results:
+                message = LLMMessage(role="user", tool_result=tool_result)
+                messages.append(message)
+
+            reflection = self.reflect_on_result(tool_results)
+            if reflection:
+                step.state = AgentStepState.REFLECTING
+                step.reflection = reflection
+                self._update_cli_console(step)
+                messages.append(LLMMessage(role="assistant", content=reflection))
+
+            return messages
+        except Exception as e:
+            step.state = AgentStepState.ERROR
+            step.error = str(e)
+            messages.append(LLMMessage(role="user", content=f"Tool execution failed: {str(e)}"))
+            return messages

@@ -1,0 +1,24 @@
+[project]
+name = "volc-tls-mcp"
+version = "0.1.0"
+description = "火山云 TLS 日志服务 MCP 服务器"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[project.dependencies]
+mcp = "^0.1.0"
+volcengine = "^1.0.0"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pyinstaller"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

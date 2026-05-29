@@ -8,6 +8,8 @@ from trae_agent.tools.bash_tool import BashTool
 from trae_agent.tools.ckg_tool import CKGTool
 from trae_agent.tools.edit_tool import TextEditorTool
 from trae_agent.tools.json_edit_tool import JSONEditTool
+from trae_agent.tools.log_analysis_tool import LogAnalysisTool
+from trae_agent.tools.business_analysis_tool import BusinessAnalysisTool
 from trae_agent.tools.sequential_thinking_tool import SequentialThinkingTool
 from trae_agent.tools.task_done_tool import TaskDoneTool
 
@@ -22,6 +24,8 @@ __all__ = [
     "SequentialThinkingTool",
     "TaskDoneTool",
     "CKGTool",
+    "LogAnalysisTool",
+    "BusinessAnalysisTool",
 ]
 
 tools_registry: dict[str, type[Tool]] = {
@@ -31,4 +35,6 @@ tools_registry: dict[str, type[Tool]] = {
     "sequentialthinking": SequentialThinkingTool,
     "task_done": TaskDoneTool,
     "ckg": CKGTool,
+    "log_analysis": LogAnalysisTool,
+    "business_analysis": BusinessAnalysisTool,
 }

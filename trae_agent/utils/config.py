@@ -182,6 +182,32 @@ class TraeAgentConfig(AgentConfig):
 
 
 @dataclass
+class RCAAgentConfig(AgentConfig):
+    """
+    RCA agent configuration.
+    """
+
+    tools: list[str] = field(
+        default_factory=lambda: [
+            "business_analysis",
+            "log_analysis",
+            "task_done",
+        ]
+    )
+
+    codebase: str = ""
+
+    def resolve_config_values(
+        self,
+        *,
+        max_steps: int | None = None,
+    ):
+        resolved_value = resolve_config_value(cli_value=max_steps, config_value=self.max_steps)
+        if resolved_value:
+            self.max_steps = int(resolved_value)
+
+
+@dataclass
 class LakeviewConfig:
     """
     Lakeview configuration.
@@ -201,6 +227,7 @@ class Config:
     models: dict[str, ModelConfig] | None = None
 
     trae_agent: TraeAgentConfig | None = None
+    rca_agent: RCAAgentConfig | None = None
 
     @classmethod
     def create(
@@ -293,6 +320,14 @@ class Config:
                         if trae_agent_config.enable_lakeview and config.lakeview is None:
                             raise ConfigError("Lakeview is enabled but no lakeview config provided")
                         config.trae_agent = trae_agent_config
+                    case "rca_agent":
+                        rca_agent_config = RCAAgentConfig(
+                            **agent_config,
+                            mcp_servers_config=mcp_servers_config,
+                            allow_mcp_servers=allow_mcp_servers,
+                        )
+                        rca_agent_config.model = agent_model
+                        config.rca_agent = rca_agent_config
                     case _:
                         raise ConfigError(f"Unknown agent: {agent_name}")
         else:
@@ -313,6 +348,17 @@ class Config:
                 max_steps=max_steps,
             )
             self.trae_agent.model.resolve_config_values(
+                model_providers=self.model_providers,
+                provider=provider,
+                model=model,
+                model_base_url=model_base_url,
+                api_key=api_key,
+            )
+        if self.rca_agent:
+            self.rca_agent.resolve_config_values(
+                max_steps=max_steps,
+            )
+            self.rca_agent.model.resolve_config_values(
                 model_providers=self.model_providers,
                 provider=provider,
                 model=model,

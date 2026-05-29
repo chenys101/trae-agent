@@ -180,6 +180,12 @@ trae_config.yaml
 # Trajectories
 /trajectories/
 
+# Prompt templates (local overrides)
+/trae_agent/prompt/templates/*.md
+
+# RCA reports
+rca_report*.md
+
 # VS Code settings
 .vscode/
 !.vscode/launch.template.json

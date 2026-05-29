@@ -46,11 +46,7 @@ class SimpleCLIConsole(CLIConsole):
             if agent_step.step_number not in self.console_step_history:
                 # update step history
                 self.console_step_history[agent_step.step_number] = ConsoleStep(agent_step)
-
-            if (
-                agent_step.state in [AgentStepState.COMPLETED, AgentStepState.ERROR]
-                and not self.console_step_history[agent_step.step_number].agent_step_printed
-            ):
+                # Always print when we get a new step
                 self._print_step_update(agent_step, agent_execution)
                 self.console_step_history[agent_step.step_number].agent_step_printed = True
 
@@ -66,21 +62,31 @@ class SimpleCLIConsole(CLIConsole):
                     ].lake_view_panel_generator = asyncio.create_task(
                         self._create_lakeview_step_display(agent_step)
                     )
+            else:
+                # Print state transitions even for existing steps
+                self._print_step_update(agent_step, agent_execution)
 
         self.agent_execution = agent_execution
 
     @override
     async def start(self):
         """Start the console - wait for completion and then print summary."""
-        while self.agent_execution is None or (
-            self.agent_execution.agent_state != AgentState.COMPLETED
-            and self.agent_execution.agent_state != AgentState.ERROR
-        ):
-            await asyncio.sleep(1)
+        try:
+            while self.agent_execution is None or (
+                self.agent_execution.agent_state != AgentState.COMPLETED
+                and self.agent_execution.agent_state != AgentState.ERROR
+            ):
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            # Task cancelled, still print summary if we have execution info
+            pass
 
         # Print lakeview summary if enabled
         if self.lake_view and self.agent_execution:
-            await self._print_lakeview_summary()
+            try:
+                await self._print_lakeview_summary()
+            except asyncio.CancelledError:
+                pass
 
         # Print execution summary
         if self.agent_execution:
@@ -90,22 +96,28 @@ class SimpleCLIConsole(CLIConsole):
         self, agent_step: AgentStep, agent_execution: AgentExecution | None = None
     ):
         """Print a step update as it progresses."""
+        color, emoji = AGENT_STATE_INFO.get(agent_step.state, ("white", "❓"))
 
-        table = generate_agent_step_table(agent_step)
+        # Simple and clear status display
+        self.console.print(f"[{color}]{emoji} Step {agent_step.step_number}: {agent_step.state.value.title()}[/{color}]")
 
-        if agent_step.llm_usage:
-            table.add_row(
-                "Token Usage",
-                f"Input: {agent_step.llm_usage.input_tokens} Output: {agent_step.llm_usage.output_tokens}",
-            )
+        # Show additional details when completed or error
+        if agent_step.state in [AgentStepState.COMPLETED, AgentStepState.ERROR]:
+            table = generate_agent_step_table(agent_step)
 
-        if agent_execution and agent_execution.total_tokens:
-            table.add_row(
-                "Total Tokens",
-                f"Input: {agent_execution.total_tokens.input_tokens} Output: {agent_execution.total_tokens.output_tokens}",
-            )
+            if agent_step.llm_usage:
+                table.add_row(
+                    "Token Usage",
+                    f"Input: {agent_step.llm_usage.input_tokens} Output: {agent_step.llm_usage.output_tokens}",
+                )
 
-        self.console.print(table)
+            if agent_execution and agent_execution.total_tokens:
+                table.add_row(
+                    "Total Tokens",
+                    f"Input: {agent_execution.total_tokens.input_tokens} Output: {agent_execution.total_tokens.output_tokens}",
+                )
+
+            self.console.print(table)
 
     async def _print_lakeview_summary(self):
         """Print lakeview summary of all completed steps."""

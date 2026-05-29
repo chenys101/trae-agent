@@ -23,7 +23,8 @@ dependencies = [
     "asyncclick>=8.0.0",
     "pyyaml>=6.0.2",
     "textual>=0.50.0",
-    "pyinstaller==6.15.0"
+    "pyinstaller==6.15.0",
+    "volcengine>=1.0.0"
 ]
 
 [project.optional-dependencies]
@@ -39,6 +40,9 @@ evaluation = [
     "docker>=7.1.0",
     "pexpect>=4.9.0",
     "unidiff>=0.7.5",
+]
+volc_tls = [
+    "volcengine>=1.0.0",
 ]
 
 [project.scripts]

@@ -10,19 +10,7 @@ from typing import override
 import openai
 from openai.types.chat import (
     ChatCompletion,
-    ChatCompletionAssistantMessageParam,
-    ChatCompletionFunctionMessageParam,
-    ChatCompletionMessageParam,
-    ChatCompletionMessageToolCallParam,
-    ChatCompletionSystemMessageParam,
-    ChatCompletionToolParam,
-    ChatCompletionUserMessageParam,
 )
-from openai.types.chat.chat_completion_message_tool_call_param import Function
-from openai.types.chat.chat_completion_tool_message_param import (
-    ChatCompletionToolMessageParam,
-)
-from openai.types.shared_params.function_definition import FunctionDefinition
 
 from trae_agent.tools.base import Tool, ToolCall
 from trae_agent.utils.config import ModelConfig
@@ -69,7 +57,7 @@ class OpenAICompatibleClient(BaseLLMClient):
         super().__init__(model_config)
         self.provider_config = provider_config
         self.client = provider_config.create_client(self.api_key, self.base_url, self.api_version)
-        self.message_history: list[ChatCompletionMessageParam] = []
+        self.message_history: list[dict] = []
 
     @override
     def set_chat_history(self, messages: list[LLMMessage]) -> None:
@@ -79,7 +67,7 @@ class OpenAICompatibleClient(BaseLLMClient):
     def _create_response(
         self,
         model_config: ModelConfig,
-        tool_schemas: list[ChatCompletionToolParam] | None,
+        tool_schemas: list[dict] | None,
         extra_headers: dict[str, str] | None = None,
     ) -> ChatCompletion:
         """Create a response using the provider's API. This method will be decorated with retry logic."""
@@ -120,14 +108,14 @@ class OpenAICompatibleClient(BaseLLMClient):
         tool_schemas = None
         if tools:
             tool_schemas = [
-                ChatCompletionToolParam(
-                    function=FunctionDefinition(
-                        name=tool.get_name(),
-                        description=tool.get_description(),
-                        parameters=tool.get_input_schema(),
-                    ),
-                    type="function",
-                )
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.get_name(),
+                        "description": tool.get_description(),
+                        "parameters": tool.get_input_schema(),
+                    }
+                }
                 for tool in tools
             ]
 
@@ -182,25 +170,25 @@ class OpenAICompatibleClient(BaseLLMClient):
         # Update message history
         if llm_response.tool_calls:
             self.message_history.append(
-                ChatCompletionAssistantMessageParam(
-                    role="assistant",
-                    content=llm_response.content,
-                    tool_calls=[
-                        ChatCompletionMessageToolCallParam(
-                            id=tool_call.call_id,
-                            function=Function(
-                                name=tool_call.name,
-                                arguments=json.dumps(tool_call.arguments),
-                            ),
-                            type="function",
-                        )
+                {
+                    "role": "assistant",
+                    "content": llm_response.content,
+                    "tool_calls": [
+                        {
+                            "id": tool_call.call_id,
+                            "type": "function",
+                            "function": {
+                                "name": tool_call.name,
+                                "arguments": json.dumps(tool_call.arguments),
+                            }
+                        }
                         for tool_call in llm_response.tool_calls
                     ],
-                )
+                }
             )
         elif llm_response.content:
             self.message_history.append(
-                ChatCompletionAssistantMessageParam(content=llm_response.content, role="assistant")
+                {"content": llm_response.content, "role": "assistant"}
             )
 
         if self.trajectory_recorder:
@@ -214,73 +202,58 @@ class OpenAICompatibleClient(BaseLLMClient):
 
         return llm_response
 
-    def parse_messages(self, messages: list[LLMMessage]) -> list[ChatCompletionMessageParam]:
-        """Parse LLM messages to OpenAI format."""
-        openai_messages: list[ChatCompletionMessageParam] = []
+    def parse_messages(self, messages: list[LLMMessage]) -> list[dict]:
+        """Parse LLM messages to OpenAI format using simple dicts."""
+        openai_messages: list[dict] = []
         for msg in messages:
-            match msg:
-                case msg if msg.tool_call is not None:
-                    _msg_tool_call_handler(openai_messages, msg)
-                case msg if msg.tool_result is not None:
-                    _msg_tool_result_handler(openai_messages, msg)
-                case _:
-                    _msg_role_handler(openai_messages, msg)
+            if msg.tool_call is not None:
+                openai_messages.append(
+                    {
+                        "content": json.dumps(
+                            {
+                                "name": msg.tool_call.name,
+                                "arguments": msg.tool_call.arguments,
+                            }
+                        ),
+                        "role": "function",
+                        "name": msg.tool_call.name,
+                    }
+                )
+            elif msg.tool_result is not None:
+                result: str = ""
+                if msg.tool_result.result:
+                    result = result + msg.tool_result.result + "\n"
+                if msg.tool_result.error:
+                    result += "Tool call failed with error:\n"
+                    result += msg.tool_result.error
+                result = result.strip()
+                openai_messages.append(
+                    {
+                        "content": result,
+                        "role": "tool",
+                        "tool_call_id": msg.tool_result.call_id,
+                    }
+                )
+            else:
+                if msg.role == "system":
+                    if not msg.content:
+                        raise ValueError("System message content is required")
+                    openai_messages.append(
+                        {"content": msg.content, "role": "system"}
+                    )
+                elif msg.role == "user":
+                    if not msg.content:
+                        raise ValueError("User message content is required")
+                    openai_messages.append(
+                        {"content": msg.content, "role": "user"}
+                    )
+                elif msg.role == "assistant":
+                    if not msg.content:
+                        raise ValueError("Assistant message content is required")
+                    openai_messages.append(
+                        {"content": msg.content, "role": "assistant"}
+                    )
+                else:
+                    raise ValueError(f"Invalid message role: {msg.role}")
 
         return openai_messages
-
-
-def _msg_tool_call_handler(messages: list[ChatCompletionMessageParam], msg: LLMMessage) -> None:
-    if msg.tool_call:
-        messages.append(
-            ChatCompletionFunctionMessageParam(
-                content=json.dumps(
-                    {
-                        "name": msg.tool_call.name,
-                        "arguments": msg.tool_call.arguments,
-                    }
-                ),
-                role="function",
-                name=msg.tool_call.name,
-            )
-        )
-
-
-def _msg_tool_result_handler(messages: list[ChatCompletionMessageParam], msg: LLMMessage) -> None:
-    if msg.tool_result:
-        result: str = ""
-        if msg.tool_result.result:
-            result = result + msg.tool_result.result + "\n"
-        if msg.tool_result.error:
-            result += "Tool call failed with error:\n"
-            result += msg.tool_result.error
-        result = result.strip()
-        messages.append(
-            ChatCompletionToolMessageParam(
-                content=result,
-                role="tool",
-                tool_call_id=msg.tool_result.call_id,
-            )
-        )
-
-
-def _msg_role_handler(messages: list[ChatCompletionMessageParam], msg: LLMMessage) -> None:
-    if msg.role:
-        match msg.role:
-            case "system":
-                if not msg.content:
-                    raise ValueError("System message content is required")
-                messages.append(
-                    ChatCompletionSystemMessageParam(content=msg.content, role="system")
-                )
-            case "user":
-                if not msg.content:
-                    raise ValueError("User message content is required")
-                messages.append(ChatCompletionUserMessageParam(content=msg.content, role="user"))
-            case "assistant":
-                if not msg.content:
-                    raise ValueError("Assistant message content is required")
-                messages.append(
-                    ChatCompletionAssistantMessageParam(content=msg.content, role="assistant")
-                )
-            case _:
-                raise ValueError(f"Invalid message role: {msg.role}")

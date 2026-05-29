@@ -1,0 +1,33 @@
+故障描述：
+
+{description}
+
+项目索引：
+
+{project_index}
+
+{business_docs_section}
+
+请返回：
+
+{{
+  "business": "",
+  "domain": "",
+  "guide": "",
+  "confidence": 0-1,
+  "reason": "",
+  "matched_keywords": [],
+  "log_keywords": [],
+  "business_entry_points": [],
+  "key_services": [],
+  "business_process": ""
+}}
+
+说明：
+- guide: **必须**返回 `<子项目>/project-index.md` 格式的路径，例如 `app/project-index.md`
+  - **不要**返回 `app/business/business-index.md`！
+  - **不要**返回 `<子项目>/project-*.md` 或其他文档路径！
+- log_keywords: 从文档中提取的用于日志搜索的关键词（如 orderId, traceId, 错误消息模板等）
+- business_entry_points: 业务入口点（如 MQ topic, API 路径, controller 类名等）
+- key_services: 相关的关键服务/模块名称
+- business_process: 业务流程的简要描述（100字以内）

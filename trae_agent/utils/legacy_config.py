@@ -96,7 +96,7 @@ class LegacyConfig:
                 self._config = {}
 
         self.default_provider = self._config.get("default_provider", "anthropic")
-        self.max_steps = self._config.get("max_steps", 20)
+        self.max_steps = self._config.get("max_steps", 5)
         self.model_providers = {}
         self.enable_lakeview = self._config.get("enable_lakeview", True)
         self.mcp_servers = {

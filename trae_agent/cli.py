@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import traceback
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -185,8 +186,8 @@ def cli():
 @click.option(
     "--agent-type",
     "-at",
-    type=click.Choice(["trae_agent"], case_sensitive=False),
-    help="Type of agent to use (trae_agent)",
+    type=click.Choice(["trae_agent", "rca_agent"], case_sensitive=False),
+    help="Type of agent to use (trae_agent or rca_agent)",
     default="trae_agent",
 )
 def run(
@@ -433,8 +434,8 @@ def run(
 @click.option(
     "--agent-type",
     "-at",
-    type=click.Choice(["trae_agent"], case_sensitive=False),
-    help="Type of agent to use (trae_agent)",
+    type=click.Choice(["trae_agent", "rca_agent"], case_sensitive=False),
+    help="Type of agent to use (trae_agent or rca_agent)",
     default="trae_agent",
 )
 def interactive(
@@ -720,6 +721,148 @@ def tools():
             tools_table.add_row(tool_name, f"[red]Error loading: {e}[/red]")
 
     console.print(tools_table)
+
+
+
+
+
+@cli.command()
+@click.argument("description", required=False)
+@click.option("--file", "-f", "file_path", help="Path to a file containing the fault description.")
+@click.option("--codebase", "-c", help="Path to the codebase for analysis. Uses config value if not provided.")
+@click.option("--output", "-o", help="Path to save the RCA report (Markdown format).")
+@click.option("--topic-id", help="VolcTLS topic ID for log query (optional, uses VOLC_TOPIC_ID env var if not provided).")
+@click.option("--provider", "-p", help="LLM provider to use")
+@click.option("--model", "-m", help="Specific model to use")
+@click.option("--model-base-url", help="Base URL for the model API")
+@click.option("--api-key", "-k", help="API key (or set via environment variable)")
+@click.option("--max-steps", help="Maximum number of execution steps", type=int)
+@click.option(
+    "--config-file",
+    help="Path to configuration file",
+    default="trae_config.yaml",
+    envvar="TRAE_CONFIG_FILE",
+)
+@click.option("--trajectory-file", "-t", help="Path to save trajectory file")
+def rca_report(
+    description: str | None,
+    file_path: str | None,
+    codebase: str,
+    output: str | None,
+    topic_id: str | None,
+    provider: str | None,
+    model: str | None,
+    model_base_url: str | None,
+    api_key: str | None,
+    max_steps: int | None,
+    config_file: str,
+    trajectory_file: str | None,
+):
+    """
+    Generate an RCA (Root Cause Analysis) report based on a fault description.
+    
+    Uses RCAAgent with LLM reasoning + tool calls to perform comprehensive analysis.
+    
+    Example usage:
+        trae-agent rca-report "Authentication failure in login service" -c /path/to/codebase -o rca_report.md
+    """
+    from trae_agent.agent.agent import Agent, AgentType
+    from trae_agent.utils.config import Config
+    from trae_agent.utils.cli.simple_console import SimpleCLIConsole
+    from trae_agent.utils.cli.cli_console import ConsoleMode
+    
+    if file_path:
+        if description:
+            console.print("[red]Error: Cannot use both a description string and the --file argument.[/red]")
+            sys.exit(1)
+        try:
+            description = Path(file_path).read_text()
+        except FileNotFoundError:
+            console.print(f"[red]Error: File not found: {file_path}[/red]")
+            sys.exit(1)
+    elif not description:
+        console.print("[red]Error: Must provide either a description string or use the --file argument.[/red]")
+        sys.exit(1)
+
+    # Load config
+    config = Config.create(config_file=resolve_config_file(config_file))
+
+    # Use codebase from config if not provided
+    if not codebase:
+        if config.rca_agent and config.rca_agent.codebase:
+            codebase = config.rca_agent.codebase
+
+    if not codebase:
+        console.print("[red]Error: Codebase path is required. Provide via -c option or set agents.rca_agent.codebase in config file.[/red]")
+        sys.exit(1)
+
+    if not Path(codebase).exists():
+        console.print(f"[red]Error: Codebase path does not exist: {codebase}[/red]")
+        sys.exit(1)
+
+    config = config.resolve_config_values(
+        provider=provider,
+        model=model,
+        model_base_url=model_base_url,
+        api_key=api_key,
+        max_steps=max_steps,
+    )
+    
+    console.print(f"[blue]Starting RCA Analysis...[/blue]")
+    console.print(f"[blue]Codebase: {codebase}[/blue]")
+    console.print(f"[blue]Fault Description: {description[:50]}...[/blue]")
+    
+    try:
+        # Create CLI console for real-time status updates
+        cli_console = SimpleCLIConsole(mode=ConsoleMode.RUN, lakeview_config=config.lakeview if hasattr(config, "lakeview") else None)
+        
+        # Create RCAAgent
+        agent = Agent(
+            AgentType.RCAAgent,
+            config,
+            trajectory_file=trajectory_file,
+            cli_console=cli_console,
+            docker_config=None,
+            docker_keep=True,
+        )
+        
+        # Build extra args
+        extra_args = {"codebase_path": codebase}
+        if topic_id or os.environ.get("VOLC_TOPIC_ID"):
+            extra_args["topic_id"] = topic_id or os.environ.get("VOLC_TOPIC_ID")
+
+        if output:
+            extra_args["output_file"] = output
+        else:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            extra_args["output_file"] = f"rca_report-{timestamp}.md"
+        
+        # Run analysis using Agent.run() which handles MCP initialization/cleanup
+        console.print("\n[blue]🚀 RCAAgent starting analysis...[/blue]")
+        
+        execution = asyncio.run(
+            agent.run(
+                task=description,
+                extra_args=extra_args,
+            )
+        )
+        
+        final_report = execution.final_result or ""
+        
+        console.print("\n" + "="*80)
+        console.print("[green]✅ RCA Report Generated Successfully![/green]")
+        console.print("="*80)
+        console.print(final_report, markup=False)
+        
+        console.print(f"\n[green]Trajectory saved to: {agent.trajectory_file}[/green]")
+        
+    except Exception as e:
+        error_msg = f"Unexpected error: {e}"
+        console.print("[red]Unexpected error:[/red]", markup=False)
+        console.print(str(e), markup=False)
+        console.print(traceback.format_exc(), markup=False)
+        sys.exit(1)
 
 
 def main():

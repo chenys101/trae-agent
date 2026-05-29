@@ -9,6 +9,7 @@ from trae_agent.utils.trajectory_recorder import TrajectoryRecorder
 
 class AgentType(Enum):
     TraeAgent = "trae_agent"
+    RCAAgent = "rca_agent"
 
 
 class Agent:
@@ -47,9 +48,25 @@ class Agent:
                 )
 
                 self.agent.set_cli_console(cli_console)
+            case AgentType.RCAAgent:
+                if config.rca_agent is None:
+                    if config.trae_agent is None:
+                        raise ValueError("rca_agent_config or trae_agent_config is required for RCAAgent")
+                    agent_config = config.trae_agent
+                else:
+                    agent_config = config.rca_agent
+                from .rca_agent import RCAAgent
+
+                self.agent_config: AgentConfig = agent_config
+
+                self.agent: RCAAgent = RCAAgent(
+                    self.agent_config, docker_config=docker_config, docker_keep=docker_keep
+                )
+
+                self.agent.set_cli_console(cli_console)
 
         if cli_console:
-            if config.trae_agent.enable_lakeview:
+            if config.trae_agent and hasattr(config.trae_agent, "enable_lakeview") and config.trae_agent.enable_lakeview:
                 cli_console.set_lakeview(config.lakeview)
             else:
                 cli_console.set_lakeview(None)
@@ -95,6 +112,11 @@ class Agent:
                 await self.agent.cleanup_mcp_clients()
 
         if cli_console_task:
-            await cli_console_task
+            # Wait for console task with cancellation handling
+            try:
+                await cli_console_task
+            except asyncio.CancelledError:
+                # Console task was cancelled, that's okay
+                pass
 
         return execution
