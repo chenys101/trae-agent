@@ -123,6 +123,15 @@ class RCAAgent(BaseAgent):
             self.project_path = extra_args["codebase_path"]
             user_message += f"[Codebase path]:\n{self.project_path}\n\n"
 
+        # Update doc_path from extra_args if provided
+        if extra_args and "doc_path" in extra_args:
+            if hasattr(self._agent_config, 'doc_path'):
+                self._agent_config.doc_path = extra_args["doc_path"]
+            # Update doc_path in BusinessAnalysisTool instance
+            for tool in self._tools:
+                if hasattr(tool, 'set_doc_path'):
+                    tool.set_doc_path(extra_args["doc_path"])
+
         user_message += f"[Fault description]:\n{task}\n"
 
         if extra_args:

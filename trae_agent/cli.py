@@ -292,15 +292,25 @@ def run(
         )
         sys.exit(1)
 
-    config = Config.create(
-        config_file=config_file,
-    ).resolve_config_values(
-        provider=provider,
-        model=model,
-        model_base_url=model_base_url,
-        api_key=api_key,
-        max_steps=max_steps,
-    )
+    # Load config
+    try:
+        config = Config.create(
+            config_file=config_file,
+        ).resolve_config_values(
+            provider=provider,
+            model=model,
+            model_base_url=model_base_url,
+            api_key=api_key,
+            max_steps=max_steps,
+        )
+    except Exception as e:
+        # Import ConfigError if not already imported
+        from trae_agent.utils.config import ConfigError
+        if isinstance(e, ConfigError):
+            console.print(f"\n{e}")
+        else:
+            console.print(f"[red]Error loading configuration: {e}[/red]")
+        sys.exit(1)
 
     if not agent_type:
         console.print("[red]Error: agent_type is required.[/red]")
@@ -457,15 +467,25 @@ def interactive(
     # Apply backward compatibility for config file
     config_file = resolve_config_file(config_file)
 
-    config = Config.create(
-        config_file=config_file,
-    ).resolve_config_values(
-        provider=provider,
-        model=model,
-        model_base_url=model_base_url,
-        api_key=api_key,
-        max_steps=max_steps,
-    )
+    # Load config
+    try:
+        config = Config.create(
+            config_file=config_file,
+        ).resolve_config_values(
+            provider=provider,
+            model=model,
+            model_base_url=model_base_url,
+            api_key=api_key,
+            max_steps=max_steps,
+        )
+    except Exception as e:
+        # Import ConfigError if not already imported
+        from trae_agent.utils.config import ConfigError
+        if isinstance(e, ConfigError):
+            console.print(f"\n{e}")
+        else:
+            console.print(f"[red]Error loading configuration: {e}[/red]")
+        sys.exit(1)
 
     if config.trae_agent:
         trae_agent_config = config.trae_agent
@@ -648,15 +668,25 @@ Using default settings and environment variables.""",
             )
         )
 
-    config = Config.create(
-        config_file=config_file,
-    ).resolve_config_values(
-        provider=provider,
-        model=model,
-        model_base_url=model_base_url,
-        api_key=api_key,
-        max_steps=max_steps,
-    )
+    # Load config
+    try:
+        config = Config.create(
+            config_file=config_file,
+        ).resolve_config_values(
+            provider=provider,
+            model=model,
+            model_base_url=model_base_url,
+            api_key=api_key,
+            max_steps=max_steps,
+        )
+    except Exception as e:
+        # Import ConfigError if not already imported
+        from trae_agent.utils.config import ConfigError
+        if isinstance(e, ConfigError):
+            console.print(f"\n{e}")
+        else:
+            console.print(f"[red]Error loading configuration: {e}[/red]")
+        sys.exit(1)
 
     if config.trae_agent:
         trae_agent_config = config.trae_agent
@@ -730,6 +760,7 @@ def tools():
 @click.argument("description", required=False)
 @click.option("--file", "-f", "file_path", help="Path to a file containing the fault description.")
 @click.option("--codebase", "-c", help="Path to the codebase for analysis. Uses config value if not provided.")
+@click.option("--doc-path", "-dp", help="Path to documentation directory (relative to codebase). Default: doc")
 @click.option("--output", "-o", help="Path to save the RCA report (Markdown format).")
 @click.option("--topic-id", help="VolcTLS topic ID for log query (optional, uses VOLC_TOPIC_ID env var if not provided).")
 @click.option("--provider", "-p", help="LLM provider to use")
@@ -748,6 +779,7 @@ def rca_report(
     description: str | None,
     file_path: str | None,
     codebase: str,
+    doc_path: str | None,
     output: str | None,
     topic_id: str | None,
     provider: str | None,
@@ -767,10 +799,10 @@ def rca_report(
         trae-agent rca-report "Authentication failure in login service" -c /path/to/codebase -o rca_report.md
     """
     from trae_agent.agent.agent import Agent, AgentType
-    from trae_agent.utils.config import Config
+    from trae_agent.utils.config import Config, ConfigError
     from trae_agent.utils.cli.simple_console import SimpleCLIConsole
     from trae_agent.utils.cli.cli_console import ConsoleMode
-    
+
     if file_path:
         if description:
             console.print("[red]Error: Cannot use both a description string and the --file argument.[/red]")
@@ -785,7 +817,11 @@ def rca_report(
         sys.exit(1)
 
     # Load config
-    config = Config.create(config_file=resolve_config_file(config_file))
+    try:
+        config = Config.create(config_file=resolve_config_file(config_file))
+    except ConfigError as e:
+        console.print(f"\n{e}")
+        sys.exit(1)
 
     # Use codebase from config if not provided
     if not codebase:
@@ -800,6 +836,13 @@ def rca_report(
         console.print(f"[red]Error: Codebase path does not exist: {codebase}[/red]")
         sys.exit(1)
 
+    # Use doc_path from config if not provided
+    if not doc_path:
+        if config.rca_agent and hasattr(config.rca_agent, 'doc_path'):
+            doc_path = config.rca_agent.doc_path
+        else:
+            doc_path = "doc"
+
     config = config.resolve_config_values(
         provider=provider,
         model=model,
@@ -810,6 +853,7 @@ def rca_report(
     
     console.print(f"[blue]Starting RCA Analysis...[/blue]")
     console.print(f"[blue]Codebase: {codebase}[/blue]")
+    console.print(f"[blue]Doc Path: {doc_path}[/blue]")
     console.print(f"[blue]Fault Description: {description[:50]}...[/blue]")
     
     try:
@@ -827,7 +871,7 @@ def rca_report(
         )
         
         # Build extra args
-        extra_args = {"codebase_path": codebase}
+        extra_args = {"codebase_path": codebase, "doc_path": doc_path}
         if topic_id or os.environ.get("VOLC_TOPIC_ID"):
             extra_args["topic_id"] = topic_id or os.environ.get("VOLC_TOPIC_ID")
 

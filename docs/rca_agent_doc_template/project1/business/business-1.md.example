@@ -1,0 +1,123 @@
+# 订单创建
+
+> **生成日期**: YYYY-MM-DD
+> **文档版本**: 1.0
+> **所属项目**: project1
+> **业务域**: 订单创建
+
+---
+
+## 概述
+
+本文档描述订单创建业务域的业务逻辑和代码位置，用于 RCA Agent 快速定位故障相关代码。
+
+---
+
+## 业务描述
+
+订单创建是订单系统的核心功能，负责接收用户下单请求，创建订单记录，并触发后续的库存扣减、支付等流程。
+
+### 业务流程
+
+```
+用户下单 → 参数校验 → 创建订单 → 库存扣减 → 支付创建 → 返回结果
+```
+
+---
+
+## 核心代码位置
+
+> ⚠️ **重要**: 以下链接使用 `file:///` 格式，RCA Agent 会自动加载这些代码文件提取日志关键词。
+
+### 主要服务类
+
+| 功能 | 代码路径 | 描述 |
+|------|---------|------|
+| 订单创建服务 | [CreateOrderService.java](file:///project1/project1-server/src/main/java/com/example/service/CreateOrderService.java) | 订单创建核心逻辑 |
+| 订单校验服务 | [OrderValidateService.java](file:///project1/project1-server/src/main/java/com/example/service/OrderValidateService.java) | 订单参数校验 |
+| 订单DAO | [OrderDao.java](file:///project1/project1-server/src/main/java/com/example/dao/OrderDao.java) | 订单数据访问 |
+
+### 入口类
+
+| 类型 | 代码路径 | 描述 |
+|------|---------|------|
+| API控制器 | [OrderController.java](file:///project1/project1-server/src/main/java/com/example/controller/OrderController.java) | HTTP接口入口 |
+| 消息消费者 | [OrderConsumer.java](file:///project1/project1-server/src/main/java/com/example/consumer/OrderConsumer.java) | MQ消息消费入口 |
+| 消息处理器 | [CreateOrderProcess.java](file:///project1/project1-server/src/main/java/com/example/process/CreateOrderProcess.java) | 订单创建处理流程 |
+
+---
+
+## 日志关键词
+
+### 日志消息模板
+
+| 模板 | 含义 | 代码位置 |
+|------|------|----------|
+| 【订单创建】 | 订单创建流程开始 | CreateOrderService.java |
+| 【订单校验】 | 订单参数校验 | OrderValidateService.java |
+| 【库存扣减】 | 库存扣减操作 | CreateOrderService.java |
+| 【订单创建成功】 | 订单创建成功 | CreateOrderService.java |
+| 【订单创建失败】 | 订单创建失败 | CreateOrderService.java |
+
+### 常见日志关键词
+
+| 关键词 | 含义 | 示例日志 |
+|--------|------|----------|
+| CreateOrder | 创建订单 | `CreateOrder request received` |
+| orderId | 订单号 | `orderId: 123456` |
+| outOrderId | 外部订单号 | `outOrderId: EXT123` |
+| validateFailed | 校验失败 | `validateFailed: param is null` |
+| createSuccess | 创建成功 | `createSuccess: orderId=123456` |
+| createFailed | 创建失败 | `createFailed: reason=库存不足` |
+
+---
+
+## 常见故障
+
+### 故障1: 订单创建失败 - 参数校验失败
+
+| 项目 | 内容 |
+|------|------|
+| **故障描述** | 订单创建时参数校验失败，返回参数错误 |
+| **日志关键词** | `validateFailed`, `参数错误`, `【订单校验】` |
+| **可能原因** | 1. 必填参数缺失 2. 参数格式错误 3. 参数值超出范围 |
+| **排查方法** | 1. 查看日志中的具体错误信息 2. 检查请求参数 3. 查看 OrderValidateService 校验逻辑 |
+| **相关代码** | [OrderValidateService.java](file:///project1/project1-server/src/main/java/com/example/service/OrderValidateService.java) |
+
+### 故障2: 订单创建失败 - 库存不足
+
+| 项目 | 内容 |
+|------|------|
+| **故障描述** | 订单创建时库存扣减失败，返回库存不足 |
+| **日志关键词** | `库存不足`, `stockNotEnough`, `【库存扣减】` |
+| **可能原因** | 1. 商品库存不足 2. 库存服务异常 3. 并发扣减导致 |
+| **排查方法** | 1. 查看库存服务日志 2. 检查商品库存 3. 检查是否有并发问题 |
+| **相关代码** | [CreateOrderService.java](file:///project1/project1-server/src/main/java/com/example/service/CreateOrderService.java) |
+
+### 故障3: 订单创建失败 - 数据库异常
+
+| 项目 | 内容 |
+|------|------|
+| **故障描述** | 订单创建时数据库操作失败 |
+| **日志关键词** | `SQLException`, `数据库异常`, `insertFailed` |
+| **可能原因** | 1. 数据库连接失败 2. 主键冲突 3. 字段长度超限 |
+| **排查方法** | 1. 查看数据库日志 2. 检查数据库连接 3. 检查数据格式 |
+| **相关代码** | [OrderDao.java](file:///project1/project1-server/src/main/java/com/example/dao/OrderDao.java) |
+
+---
+
+## 依赖服务
+
+| 服务名 | 描述 | 故障影响 |
+|--------|------|----------|
+| 库存服务 | 库存扣减 | 订单创建失败 |
+| 支付服务 | 支付创建 | 订单创建失败 |
+| 用户服务 | 用户信息校验 | 订单创建失败 |
+
+---
+
+## 相关链接
+
+- [业务文档索引](business-index.md)
+- [project1 子项目索引](../project-index.md)
+- [代码库总索引](../../codebase-index.md)

@@ -1,0 +1,201 @@
+# 子项目索引
+
+> **生成日期**: YYYY-MM-DD
+> **文档版本**: 1.0
+> **所属代码库**: `<workspace>`
+
+---
+
+## 项目配置
+
+> ⚠️ **重要**: 以下配置项会被 `business_analysis` 工具自动解析，请勿修改格式！
+
+### 入口类关键词（必须）
+
+entry_keywords:
+  - Api
+  - Service
+  - Handler
+  - Processor
+  - Process
+  - ConsumerHandler
+  - InoutService
+
+### 高优先级关键词
+
+high_priority_keywords:
+  - CreateOmsOrderProcess
+  - ConsumerHandler
+  - InoutService
+
+### 容器命名模式
+
+container_patterns:
+  - -server
+  - -gateway
+  - -web
+  - -worker
+
+### 入口文件搜索模式
+
+entry_patterns:
+  - "**/*ConsumerHandler*.java"
+  - "**/*Process*.java"
+  - "**/*Service*.java"
+
+### 代码文件后缀
+
+extension: .java
+
+---
+
+## 1. 项目基础信息
+
+### 1.1 技术栈
+
+| 技术类别 | 具体实现 | 证据来源 |
+|---------|---------|---------|
+| **基础框架** | Spring Boot | `project1/pom.xml` |
+| **微服务** | Spring Cloud (Eureka, OpenFeign, Gateway) | `project1/pom.xml` |
+| **数据库** | PostgreSQL | `project1/pom.xml` |
+| **消息队列** | RocketMQ | `project1/pom.xml` |
+| **注册中心** | Eureka | `project1/src/main/resources/application.properties` |
+| **日志** | Logback | `project1/src/main/resources/logback-spring.xml` |
+
+### 1.2 构建工具
+
+- **Maven**
+- **构建插件**: `spring-boot-maven-plugin`
+
+### 1.3 仓库结构
+
+```
+project1/
+├── pom.xml                      # 父 POM
+├── project1-server/            # 服务端核心模块
+│   └── src/main/java/...
+├── project1-client/            # 客户端 SDK
+│   └── src/main/java/...
+├── project1-model/             # 数据模型
+│   └── src/main/java/...
+└── deployment/                  # 部署配置
+    ├── prod/
+    └── test/
+```
+
+---
+
+## 2. 容器名称映射表
+
+> ⚠️ **重要**: 此表格用于自动提取容器名称，请保持格式不变！
+
+| 模块 | 环境 | deployment 文件 | containers.name |
+|------|------|----------------|-----------------|
+| project1-server | prod | `project1/project1-server/deployment/prod/deploy.yaml` | `project1-server` |
+| project1-gateway | prod | `project1/project1-server-gateway/deployment/prod/deploy.yaml` | `project1-gateway` |
+| project1-server-tms | prod | `project1/project1-server-tms/deployment/prod/deploy.yaml` | `project1-server-tms` |
+| project1-web | prod | `project1/project1-web/deployment/prod/deploy.yaml` | `project1-web` |
+
+---
+
+## 3. 核心业务模块
+
+### 3.1 模块列表
+
+| 模块名 | 代码路径 | 描述 |
+|--------|---------|------|
+| project1-server | `project1/project1-server/` | 服务端核心模块 |
+| project1-client | `project1/project1-client/` | 客户端 SDK |
+| project1-model | `project1/project1-model/` | 数据模型 |
+
+### 3.2 核心服务
+
+| 服务名 | 代码路径 | 描述 |
+|--------|---------|------|
+| XxxService | [XxxService.java](file:///project1/project1-server/src/main/java/com/example/service/XxxService.java) | XXX服务 |
+| YyyService | [YyyService.java](file:///project1/project1-server/src/main/java/com/example/service/YyyService.java) | YYY服务 |
+
+---
+
+## 4. 日志配置
+
+### 4.1 日志框架
+
+- **框架**: Logback
+- **配置文件**: `project1/src/main/resources/logback-spring.xml`
+
+### 4.2 日志关键词
+
+| 关键词 | 含义 | 使用场景 |
+|--------|------|----------|
+| error | 错误 | 通用错误日志 |
+| exception | 异常 | 异常堆栈 |
+| timeout | 超时 | 超时相关错误 |
+| failed | 失败 | 操作失败 |
+
+### 4.3 日志消息模板
+
+| 模板 | 含义 | 代码位置 |
+|------|------|----------|
+| 【订单创建】 | 订单创建流程 | `XxxService.java` |
+| 【库存扣减】 | 库存扣减流程 | `YyyService.java` |
+
+---
+
+## 5. 业务入口点
+
+### 5.1 API 入口
+
+| 接口路径 | 描述 | 处理类 |
+|----------|------|--------|
+| `/api/xxx` | XXX接口 | [XxxController.java](file:///project1/project1-server/src/main/java/com/example/controller/XxxController.java) |
+| `/api/yyy` | YYY接口 | [YyyController.java](file:///project1/project1-server/src/main/java/com/example/controller/YyyController.java) |
+
+### 5.2 消息消费者
+
+| Topic | 描述 | 消费者类 |
+|-------|------|----------|
+| xxx-topic | XXX消息 | [XxxConsumer.java](file:///project1/project1-server/src/main/java/com/example/consumer/XxxConsumer.java) |
+
+### 5.3 定时任务
+
+| 任务名 | 描述 | 执行类 |
+|--------|------|--------|
+| XxxJob | XXX定时任务 | [XxxJob.java](file:///project1/project1-server/src/main/java/com/example/job/XxxJob.java) |
+
+---
+
+## 6. 业务文档
+
+详细的业务文档位于 `doc/project1/business/` 目录：
+
+- [业务文档索引](business/business-index.md)
+- [业务域1 - 订单创建](business/business-1.md)
+
+---
+
+## 7. 故障排查指南
+
+### 7.1 常见故障模式
+
+| 故障类型 | 日志关键词 | 可能原因 | 排查步骤 |
+|----------|-----------|----------|----------|
+| 订单创建失败 | CreateOrder, error | 参数校验失败、数据库异常 | 1. 查看日志 2. 检查参数 3. 检查数据库 |
+| 消息消费失败 | Consumer, exception | 消息格式错误、处理超时 | 1. 查看消息内容 2. 检查消费者日志 |
+| 接口超时 | timeout, error | 下游服务异常、网络问题 | 1. 检查下游服务 2. 检查网络 |
+
+### 7.2 排查流程
+
+```
+1. business_analysis → 识别业务域、获取容器名和日志关键词
+2. search_logs → 搜索 TLS 日志
+3. 如果日志包含堆栈 → 直接定位代码位置 → generate_report
+4. 如果日志不包含堆栈 → read_file 查看相关代码 → generate_report
+```
+
+---
+
+## 相关链接
+
+- [代码库总索引](../codebase-index.md)
+- [业务文档索引](business/business-index.md)

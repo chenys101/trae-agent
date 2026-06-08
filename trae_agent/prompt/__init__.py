@@ -3,13 +3,13 @@
 Prompt modules
 """
 from .business_analysis_prompts import (
-    SYSTEM_PROMPT,
+    get_system_prompt,
     USER_PROMPT_TEMPLATE,
     build_user_prompt
 )
 
 __all__ = [
-    'SYSTEM_PROMPT',
+    'get_system_prompt',
     'USER_PROMPT_TEMPLATE',
     'build_user_prompt'
 ]

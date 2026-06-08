@@ -51,44 +51,122 @@ source .venv/bin/activate
 2. Edit `trae_config.yaml` with your API credentials and preferences:
 
 ```yaml
+# Global default provider
+default_provider: anthropic
+
+# Model providers configuration
+model_providers:
+  anthropic:
+    api_key: your_anthropic_api_key
+    provider: anthropic
+    # Provider-level model parameters (recommended for all models)
+    max_tokens: 4096
+    temperature: 0.5
+    top_p: 1
+    top_k: 40
+    max_retries: 10
+    parallel_tool_calls: true
+    # Provider's default model
+    default_model: claude-sonnet-4-20250514
+    # Model-specific configurations (optional)
+    models:
+      claude-sonnet-4-20250514:
+        max_tokens: 4096
+        temperature: 0.5
+        top_p: 1
+        top_k: 40
+        max_retries: 10
+        parallel_tool_calls: true
+
+  openai:
+    api_key: your_openai_api_key
+    provider: openai
+    # Provider-level model parameters
+    max_tokens: 4096
+    temperature: 0.5
+    top_p: 1
+    top_k: 0
+    max_retries: 10
+    parallel_tool_calls: true
+    default_model: gpt-4o
+
+# Lakeview configuration (optional)
+lakeview:
+  provider: anthropic  # Optional, uses default_provider if not specified
+  model: claude-3.5-sonnet  # Optional, uses provider's default_model if not specified
+
+# Agents configuration
 agents:
   trae_agent:
     enable_lakeview: true
-    model: trae_agent_model  # the model configuration name for Trae Agent
-    max_steps: 200  # max number of agent steps
-    tools:  # tools used with Trae Agent
+    # Agent-level provider and model configuration (optional)
+    provider: anthropic  # Optional, uses default_provider if not specified
+    model: claude-sonnet-4-20250514  # Optional, uses provider's default_model if not specified
+    max_steps: 200
+    tools:
       - bash
       - str_replace_based_edit_tool
       - sequentialthinking
       - task_done
 
-model_providers:  # model providers configuration
-  anthropic:
-    api_key: your_anthropic_api_key
-    provider: anthropic
-  openai:
-    api_key: your_openai_api_key
-    provider: openai
-
-models:
-  trae_agent_model:
-    model_provider: anthropic
-    model: claude-sonnet-4-20250514
-    max_tokens: 4096
-    temperature: 0.5
+  rca_agent:
+    provider: openai  # Different provider for RCA agent
+    model: gpt-4o
+    max_steps: 15
+    tools:
+      - business_analysis
+      - log_analysis
+      - task_done
 ```
+
+**Key Configuration Features:**
+
+- **Default Provider**: Set a global default provider to avoid repeating configuration
+- **Provider-Level Parameters**: Configure model parameters at the provider level (recommended)
+- **Model-Specific Parameters**: Override provider-level parameters for specific models
+- **Agent-Level Configuration**: Each agent can use a different provider and model
+- **Flexible Priority**: CLI arguments > Agent config > Default provider/model
 
 **Note:** The `trae_config.yaml` file is ignored by git to protect your API keys.
 
-### Using Base URL
-In some cases, we need to use a custom URL for the api. Just add the `base_url` field after `provider`, take the following config as an example:
+### Configuration Priority
 
-```
-openai:
+**Provider Selection Priority:**
+1. CLI `--provider` argument
+2. Agent configuration `provider` field
+3. Global `default_provider` configuration
+4. Error if not configured
+
+**Model Selection Priority:**
+1. CLI `--model` argument
+2. Agent configuration `model` field
+3. Provider's `default_model` configuration
+4. Error if not configured
+
+**Model Parameters Priority:**
+1. Model-specific configuration (in `provider.models.<model_name>`)
+2. Provider-level configuration
+3. Error if required parameters not configured
+
+### Using Base URL
+
+In some cases, we need to use a custom URL for the api. Just add the `base_url` field after `provider`:
+
+```yaml
+model_providers:
+  openai:
     api_key: your_openrouter_api_key
     provider: openai
     base_url: https://openrouter.ai/api/v1
+    max_tokens: 4096
+    temperature: 0.5
+    top_p: 1
+    top_k: 0
+    max_retries: 10
+    parallel_tool_calls: true
+    default_model: gpt-4o
 ```
+
 **Note:** For field formatting, use spaces only. Tabs (\t) are not allowed.
 
 ### Environment Variables (Alternative)
@@ -120,8 +198,6 @@ mcp_servers:
       - "@playwright/mcp@0.0.27"
 ```
 
-**Configuration Priority:** Command-line arguments > Configuration file > Environment variables > Default values
-
 **Legacy JSON Configuration:** If using the older JSON format, see [docs/legacy_config.md](docs/legacy_config.md). We recommend migrating to YAML.
 
 ## 📖 Usage
@@ -129,7 +205,7 @@ mcp_servers:
 ### Basic Commands
 
 ```bash
-# Simple task execution
+# Simple task execution (uses default provider and model)
 trae-cli run "Create a hello world Python script"
 
 # Check configuration
@@ -138,6 +214,23 @@ trae-cli show-config
 # Interactive mode
 trae-cli interactive
 ```
+
+### CLI Parameter Override
+
+You can override provider and model settings via CLI arguments:
+
+```bash
+# Override provider and model
+trae-cli run "Fix the bug in main.py" --provider openai --model gpt-4o
+
+# Override only provider (uses provider's default_model)
+trae-cli run "Add unit tests" --provider anthropic
+
+# Override only model (uses default_provider)
+trae-cli run "Optimize algorithm" --model claude-sonnet-4-20250514
+```
+
+**Note:** CLI arguments have the highest priority and will override all configuration file settings.
 
 ### Provider-Specific Examples
 
@@ -176,6 +269,50 @@ trae-cli run "Update API endpoints" --must-patch
 
 # Interactive mode with custom settings
 trae-cli interactive --provider openai --model gpt-4o --max-steps 30
+```
+
+### RCA Agent (Root Cause Analysis)
+
+Trae Agent includes a specialized RCA (Root Cause Analysis) agent for analyzing and diagnosing issues in your codebase:
+
+```bash
+# Basic RCA analysis
+trae-cli rca-report "Authentication failure in login service" -c /path/to/codebase
+
+# Save RCA report to file
+trae-cli rca-report "Database connection timeout" -c /path/to/codebase -o rca_report.md
+
+# Use documentation path for context
+trae-cli rca-report "API response delay" -c /path/to/codebase -dp documentation
+
+# Load fault description from file
+trae-cli rca-report --file fault_description.txt -c /path/to/codebase
+
+# Specify provider and model for RCA
+trae-cli rca-report "Memory leak in worker process" -c /path/to/codebase --provider anthropic --model claude-sonnet-4-20250514
+
+# Save execution trajectory for debugging
+trae-cli rca-report "Service crash analysis" -c /path/to/codebase --trajectory-file rca_debug.json
+```
+
+**RCA Agent Features:**
+- **Business Analysis**: Analyzes business logic and system architecture
+- **Log Analysis**: Examines logs for error patterns and anomalies
+- **Root Cause Identification**: Uses LLM reasoning to identify potential root causes
+- **Comprehensive Reports**: Generates detailed Markdown reports with findings and recommendations
+
+**Configuration:**
+```yaml
+agents:
+  rca_agent:
+    provider: openai  # Can use different provider than trae_agent
+    model: gpt-4o
+    max_steps: 15
+    codebase: /path/to/default/codebase  # Default codebase path
+    tools:
+      - business_analysis
+      - log_analysis
+      - task_done
 ```
 
 ## Docker Mode Commands

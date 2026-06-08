@@ -14,9 +14,14 @@ def _load_prompt(filename: str) -> str:
     return prompt_path.read_text(encoding="utf-8")
 
 
-SYSTEM_PROMPT = _load_prompt("business_analysis.md")
+_SYSTEM_PROMPT_TEMPLATE = _load_prompt("business_analysis.md")
 
 USER_PROMPT_TEMPLATE = _load_prompt("business_analysis_user.md")
+
+
+def get_system_prompt(doc_path: str = "doc") -> str:
+    """获取系统提示词，替换 doc_path 占位符"""
+    return _SYSTEM_PROMPT_TEMPLATE.replace("{doc_path}", doc_path)
 
 
 def build_user_prompt(description: str, project_index: str, business_docs: dict | None = None) -> str:

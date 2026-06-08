@@ -34,6 +34,7 @@ class BaseAgent(ABC):
             agent_config: Configuration object containing model parameters and other settings.
             docker_config: Configuration for running in a Docker environment.
         """
+        self._agent_config = agent_config
         self._llm_client = LLMClient(agent_config.model)
         self._model_config = agent_config.model
         self._max_steps = agent_config.max_steps

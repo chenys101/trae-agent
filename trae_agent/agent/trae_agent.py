@@ -5,6 +5,7 @@
 
 import asyncio
 import contextlib
+import logging
 import os
 import subprocess
 from typing import override
@@ -17,6 +18,8 @@ from trae_agent.tools.base import Tool, ToolResult
 from trae_agent.utils.config import MCPServerConfig, TraeAgentConfig
 from trae_agent.utils.llm_clients.llm_basics import LLMMessage, LLMResponse
 from trae_agent.utils.mcp_client import MCPClient
+
+logger = logging.getLogger(__name__)
 
 TraeAgentToolNames = [
     "str_replace_based_edit_tool",
@@ -252,7 +255,10 @@ class TraeAgent(BaseAgent):
     async def cleanup_mcp_clients(self) -> None:
         """Clean up all MCP clients to prevent async context leaks."""
         for client in self.mcp_clients:
-            with contextlib.suppress(Exception):
+            try:
                 # Use a generic server name for cleanup since we don't track which server each client is for
                 await client.cleanup("cleanup")
+            except (Exception, asyncio.CancelledError) as e:
+                # Log the error but don't fail the cleanup process
+                logger.warning(f"Error cleaning up MCP client: {e}")
         self.mcp_clients.clear()

@@ -15,7 +15,7 @@ from trae_agent.utils.llm_clients.llm_client import LLMClient
 from trae_agent.utils.llm_clients.llm_basics import LLMMessage
 from trae_agent.utils.config import Config
 from trae_agent.prompt.business_analysis_prompts import (
-    SYSTEM_PROMPT,
+    get_system_prompt,
     build_user_prompt
 )
 from trae_agent.models.business_models import FaultBusinessResult
@@ -24,8 +24,13 @@ from trae_agent.config import get_languages, get_container_naming
 logger = logging.getLogger(__name__)
 
 
-def load_project_index(codebase: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+def load_project_index(codebase: Optional[str], doc_path: str = "doc") -> tuple[Optional[str], Optional[str]]:
     """加载 project-index.md 内容
+    
+    Args:
+        codebase: 代码库路径
+        doc_path: 文档目录路径，相对于 codebase，默认为 "doc"
+    
     Returns:
         (content, relative_path)
     """
@@ -33,10 +38,10 @@ def load_project_index(codebase: Optional[str]) -> tuple[Optional[str], Optional
         return None, None
 
     codebase_path = Path(codebase)
-    doc_dir = "doc"
-    codebase_index_name = "doc/codebase-index.md"
+    doc_dir = doc_path
+    codebase_index_name = f"{doc_path}/codebase-index.md"
     
-    doc_path = codebase_path / doc_dir
+    doc_full_path = codebase_path / doc_dir
     
     codebase_index = codebase_path / codebase_index_name
     if codebase_index.exists():
@@ -48,8 +53,8 @@ def load_project_index(codebase: Optional[str]) -> tuple[Optional[str], Optional
             logger.warning(f"Failed to load codebase-index.md: {e}")
     
     # 2. 找 doc/*/ 下的 project-index.md
-    if doc_path.exists():
-        for subdir in doc_path.iterdir():
+    if doc_full_path.exists():
+        for subdir in doc_full_path.iterdir():
             if subdir.is_dir():
                 project_index = subdir / "project-index.md"
                 if project_index.exists():
@@ -60,7 +65,7 @@ def load_project_index(codebase: Optional[str]) -> tuple[Optional[str], Optional
                     except Exception as e:
                         logger.warning(f"Failed to load {project_index}: {e}")
     
-    logger.warning(f"No project index found in {doc_path}")
+    logger.warning(f"No project index found in {doc_full_path}")
     return None, None
 
 
@@ -695,6 +700,7 @@ class BusinessAnalysisTool(Tool):
         self._description = "根据故障描述识别业务域，加载相关业务文档，并提取日志关键词、入口点等信息"
         self._config_file = config_file
         self._llm_client: LLMClient | None = None
+        self._doc_path: str | None = None
 
     @override
     def get_model_provider(self) -> str | None:
@@ -707,6 +713,24 @@ class BusinessAnalysisTool(Tool):
     @override
     def get_description(self) -> str:
         return self._description
+
+    def _get_doc_path(self) -> str:
+        """获取文档路径配置"""
+        if self._doc_path is None:
+            try:
+                config = Config.create(config_file=self._config_file)
+                if config.rca_agent and hasattr(config.rca_agent, 'doc_path'):
+                    self._doc_path = config.rca_agent.doc_path
+                else:
+                    self._doc_path = "doc"
+            except Exception as e:
+                logger.warning(f"Failed to load doc_path config: {e}")
+                self._doc_path = "doc"
+        return self._doc_path
+
+    def set_doc_path(self, doc_path: str) -> None:
+        """设置文档路径配置（由 agent 调用）"""
+        self._doc_path = doc_path
 
     @override
     def get_parameters(self) -> list[ToolParameter]:
@@ -748,8 +772,12 @@ class BusinessAnalysisTool(Tool):
     async def _analyze_business(self, description: str, codebase: Optional[str]) -> FaultBusinessResult:
         """分析业务并返回结果 - 三阶段分析"""
 
+        # 获取 doc_path 配置
+        doc_path = self._get_doc_path()
+        system_prompt = get_system_prompt(doc_path)
+
         # 1. 加载 project-index.md
-        project_index, index_path = load_project_index(codebase)
+        project_index, index_path = load_project_index(codebase, doc_path)
 
         if not project_index or not index_path:
             # 没有 project-index，返回 unknown
@@ -764,7 +792,7 @@ class BusinessAnalysisTool(Tool):
 
         # 2. 第一阶段：初步识别业务域和 guide
         first_pass_prompt = build_user_prompt(description, project_index)
-        first_pass_result = await self._call_llm(SYSTEM_PROMPT, first_pass_prompt)
+        first_pass_result = await self._call_llm(system_prompt, first_pass_prompt)
         
         if not first_pass_result:
             return FaultBusinessResult(
@@ -827,7 +855,7 @@ class BusinessAnalysisTool(Tool):
             
             if combined_content:
                 second_pass_prompt = build_user_prompt(description, project_index, combined_content)
-                second_pass_result = await self._call_llm(SYSTEM_PROMPT, second_pass_prompt)
+                second_pass_result = await self._call_llm(system_prompt, second_pass_prompt)
                 
                 if second_pass_result:
                     second_pass_data = self._parse_llm_result(second_pass_result)

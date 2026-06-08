@@ -1,62 +1,128 @@
-agents:
-    trae_agent:
-        enable_lakeview: true
-        model: trae_agent_model
-        max_steps: 200
-        tools:
-            - bash
-            - str_replace_based_edit_tool
-            - sequentialthinking
-            - task_done
-    rca_agent:
-        model: trae_agent_model
-        max_steps: 5
-        codebase: G:/workspace_master
-        tools:
-            - business_analysis
-            - log_analysis
-            - task_done
-allow_mcp_servers:
-    - playwright
-    - volc_tls
-mcp_servers:
-    playwright:
-        command: npx
-        args:
-            - "@playwright/mcp@0.0.27"
-    volc_tls:
-        command: python
-        args:
-            - -m
-            - mcp_servers.volc_tls.main
-        env:
-            VOLC_ACCESS_KEY: your_volc_access_key
-            VOLC_SECRET_KEY: your_volc_secret_key
-            VOLC_REGION: cn-beijing
-lakeview:
-    model: lakeview_model
+# 全局默认provider配置
+default_provider: anthropic
 
+# 模型提供商配置
 model_providers:
-    anthropic:
-        api_key: your_anthropic_api_key
-        provider: anthropic
+  anthropic:
+    api_key: your_anthropic_api_key
+    provider: anthropic
+    # ============================================================
+    # 方式一：在 provider 级别配置模型参数（推荐）
+    # 所有模型都会继承这些参数，无需在每个模型中重复配置
+    # ============================================================
+    max_tokens: 4096
+    temperature: 0.5
+    top_p: 1
+    top_k: 40
+    max_retries: 10
+    parallel_tool_calls: true
+    # provider的默认模型
+    default_model: claude-4-sonnet
+    # 该provider下的模型配置
+    models:
+      claude-4-sonnet:
+        # ============================================================
+        # 方式二：在 model 级别配置模型参数
+        # 仅适用于该特定模型，会覆盖 provider 级别的配置
+        # 注意：方式一和方式二二选一，推荐使用方式一
+        # ============================================================
+        max_tokens: 4096
+        temperature: 0.5
+        top_p: 1
+        top_k: 40
+        max_retries: 10
+        parallel_tool_calls: true
+      claude-3.5-sonnet:
+        max_tokens: 8192
+        temperature: 0.6
+        top_p: 1
+        top_k: 40
+        max_retries: 10
+        parallel_tool_calls: true
 
-models:
-    trae_agent_model:
-        model_provider: anthropic
-        model: claude-4-sonnet
+  openai:
+    api_key: your_openai_api_key
+    provider: openai
+    # ============================================================
+    # 方式一：在 provider 级别配置模型参数（推荐）
+    # 所有模型都会继承这些参数，无需在每个模型中重复配置
+    # ============================================================
+    max_tokens: 4096
+    temperature: 0.5
+    top_p: 1
+    top_k: 0
+    max_retries: 10
+    parallel_tool_calls: true
+    # provider的默认模型
+    default_model: gpt-4o
+    # 该provider下的模型配置
+    models:
+      gpt-4o:
+        # ============================================================
+        # 方式二：在 model 级别配置模型参数
+        # 仅适用于该特定模型，会覆盖 provider 级别的配置
+        # 注意：方式一和方式二二选一，推荐使用方式一
+        # ============================================================
         max_tokens: 4096
         temperature: 0.5
         top_p: 1
         top_k: 0
         max_retries: 10
         parallel_tool_calls: true
-    lakeview_model:
-        model_provider: anthropic
-        model: claude-3.5-sonnet
-        max_tokens: 4096
-        temperature: 0.5
+      gpt-4-turbo:
+        max_tokens: 8192
+        temperature: 0.6
         top_p: 1
         top_k: 0
         max_retries: 10
         parallel_tool_calls: true
+
+# Lakeview配置
+lakeview:
+  provider: anthropic  # 可选，不指定则使用default_provider
+  model: claude-3.5-sonnet  # 可选，不指定则使用provider的default_model
+
+# Agents配置
+agents:
+  trae_agent:
+    enable_lakeview: true
+    # agent级别的provider和model配置（可选）
+    provider: anthropic  # 可选，不指定则使用default_provider
+    model: claude-4-sonnet  # 可选，不指定则使用provider的default_model
+    max_steps: 200
+    tools:
+      - bash
+      - str_replace_based_edit_tool
+      - sequentialthinking
+      - task_done
+
+  rca_agent:
+    # agent级别的provider和model配置（可选）
+    provider: anthropic  # 可选，不指定则使用default_provider
+    model: claude-4-sonnet  # 可选，不指定则使用provider的default_model
+    max_steps: 15
+    codebase: G:/workspace_master
+    tools:
+      - business_analysis
+      - log_analysis
+      - task_done
+
+# MCP配置
+allow_mcp_servers:
+  - playwright
+  - volc_tls
+
+mcp_servers:
+  playwright:
+    command: npx
+    args:
+      - "@playwright/mcp@0.0.27"
+  volc_tls:
+    command: python
+    args:
+      - -m
+      - mcp_servers.volc_tls.main
+    env:
+      VOLC_ACCESS_KEY: your_volc_access_key
+      VOLC_SECRET_KEY: your_volc_secret_key
+      VOLC_REGION: cn-beijing

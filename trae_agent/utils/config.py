@@ -14,6 +14,24 @@ class ConfigError(Exception):
 
 
 @dataclass
+class ModelSpec:
+    """
+    Model specification within a provider.
+    Inherits default values from provider level, can override them.
+    """
+    max_tokens: int | None = None
+    temperature: float | None = None
+    top_p: float | None = None
+    top_k: int | None = None
+    max_retries: int | None = None
+    parallel_tool_calls: bool | None = None
+    supports_tool_calling: bool = True
+    candidate_count: int | None = None
+    stop_sequences: list[str] | None = None
+    max_completion_tokens: int | None = None
+
+
+@dataclass
 class ModelProvider:
     """
     Model provider configuration. For official model providers such as OpenAI and Anthropic,
@@ -24,6 +42,15 @@ class ModelProvider:
     provider: str
     base_url: str | None = None
     api_version: str | None = None
+    # 新增字段
+    default_model: str | None = None
+    max_tokens: int | None = None
+    temperature: float | None = None
+    top_p: float | None = None
+    top_k: int | None = None
+    max_retries: int | None = None
+    parallel_tool_calls: bool | None = None
+    models: dict[str, ModelSpec] | None = None
 
 
 @dataclass
@@ -44,6 +71,87 @@ class ModelConfig:
     candidate_count: int | None = None  # Gemini specific field
     stop_sequences: list[str] | None = None
     max_completion_tokens: int | None = None  # Azure OpenAI specific field
+
+    @classmethod
+    def from_provider_and_model(
+        cls,
+        provider: ModelProvider,
+        model_name: str,
+    ) -> "ModelConfig":
+        """
+        Create ModelConfig from provider and model name.
+        Model-specific config overrides provider-level defaults.
+        Raises ConfigError if required parameters are not configured.
+        """
+        # Get model-specific config if exists
+        model_spec = None
+        if provider.models and model_name in provider.models:
+            model_spec = provider.models[model_name]
+
+        # Collect all required parameters and check for missing ones
+        required_params = {
+            "max_tokens": (model_spec.max_tokens if model_spec else None, provider.max_tokens),
+            "temperature": (model_spec.temperature if model_spec else None, provider.temperature),
+            "top_p": (model_spec.top_p if model_spec else None, provider.top_p),
+            "top_k": (model_spec.top_k if model_spec else None, provider.top_k),
+            "max_retries": (model_spec.max_retries if model_spec else None, provider.max_retries),
+            "parallel_tool_calls": (model_spec.parallel_tool_calls if model_spec else None, provider.parallel_tool_calls),
+        }
+
+        # Check for missing parameters
+        missing_params = []
+        for param_name, (model_value, provider_value) in required_params.items():
+            if model_value is None and provider_value is None:
+                missing_params.append(param_name)
+
+        # If there are missing parameters, raise detailed error
+        if missing_params:
+            missing_list = ", ".join(missing_params)
+            error_msg = (
+                f"\n{'='*80}\n"
+                f"❌ CONFIGURATION ERROR\n"
+                f"{'='*80}\n\n"
+                f"Model: {model_name}\n"
+                f"Provider: {provider.provider}\n\n"
+                f"⚠️  Missing required parameters: {missing_list}\n\n"
+                f"{'='*80}\n"
+                f"CONFIGURATION GUIDE\n"
+                f"{'='*80}\n\n"
+                f"Option 1 - Configure at provider level (recommended):\n"
+                f"  model_providers:\n"
+                f"    {provider.provider}:\n"
+            )
+            for param in missing_params:
+                error_msg += f"      {param}: <value>\n"
+            
+            error_msg += (
+                f"\nOption 2 - Configure at model level:\n"
+                f"  model_providers:\n"
+                f"    {provider.provider}:\n"
+                f"      models:\n"
+                f"        {model_name}:\n"
+            )
+            for param in missing_params:
+                error_msg += f"          {param}: <value>\n"
+            
+            error_msg += f"\n{'='*80}\n"
+            raise ConfigError(error_msg)
+
+        # Build ModelConfig with validated parameters
+        return cls(
+            model=model_name,
+            model_provider=provider,
+            max_tokens=required_params["max_tokens"][0] if required_params["max_tokens"][0] is not None else required_params["max_tokens"][1],
+            temperature=required_params["temperature"][0] if required_params["temperature"][0] is not None else required_params["temperature"][1],
+            top_p=required_params["top_p"][0] if required_params["top_p"][0] is not None else required_params["top_p"][1],
+            top_k=required_params["top_k"][0] if required_params["top_k"][0] is not None else required_params["top_k"][1],
+            max_retries=required_params["max_retries"][0] if required_params["max_retries"][0] is not None else required_params["max_retries"][1],
+            parallel_tool_calls=required_params["parallel_tool_calls"][0] if required_params["parallel_tool_calls"][0] is not None else required_params["parallel_tool_calls"][1],
+            supports_tool_calling=model_spec.supports_tool_calling if model_spec else True,
+            candidate_count=model_spec.candidate_count if model_spec else None,
+            stop_sequences=model_spec.stop_sequences if model_spec else None,
+            max_completion_tokens=model_spec.max_completion_tokens if model_spec else None,
+        )
 
     def get_max_tokens_param(self) -> int:
         """Get the maximum tokens parameter value.Prioritizes max_completion_tokens, falls back to max_tokens if not available."""
@@ -151,8 +259,12 @@ class AgentConfig:
     allow_mcp_servers: list[str]
     mcp_servers_config: dict[str, MCPServerConfig]
     max_steps: int
-    model: ModelConfig
     tools: list[str]
+    # model 字段设为可选，将在创建后设置
+    model: ModelConfig | None = None
+    # 新增字段
+    provider: str | None = None
+    model_name: str | None = None
 
 
 @dataclass
@@ -196,6 +308,7 @@ class RCAAgentConfig(AgentConfig):
     )
 
     codebase: str = ""
+    doc_path: str = "doc"
 
     def resolve_config_values(
         self,
@@ -214,6 +327,8 @@ class LakeviewConfig:
     """
 
     model: ModelConfig
+    provider: str | None = None
+    model_name: str | None = None
 
 
 @dataclass
@@ -222,9 +337,11 @@ class Config:
     Configuration class for agents, models and model providers.
     """
 
+    default_provider: str | None = None
     lakeview: LakeviewConfig | None = None
     model_providers: dict[str, ModelProvider] | None = None
-    models: dict[str, ModelConfig] | None = None
+    # 移除 models 字段
+    # models: dict[str, ModelConfig] | None = None
 
     trae_agent: TraeAgentConfig | None = None
     rca_agent: RCAAgentConfig | None = None
@@ -255,40 +372,71 @@ class Config:
 
         config = cls()
 
-        # Parse model providers
+        # Parse default_provider
+        config.default_provider = yaml_config.get("default_provider", None)
+
+        # Parse model providers with models
         model_providers = yaml_config.get("model_providers", None)
         if model_providers is not None and len(model_providers.keys()) > 0:
             config_model_providers: dict[str, ModelProvider] = {}
-            for model_provider_name, model_provider_config in model_providers.items():
-                config_model_providers[model_provider_name] = ModelProvider(**model_provider_config)
+            for provider_name, provider_config in model_providers.items():
+                # Extract models from provider config
+                models_dict = provider_config.pop("models", None) if isinstance(provider_config, dict) else None
+                model_specs = None
+                if models_dict:
+                    model_specs = {}
+                    for model_name, model_spec_config in models_dict.items():
+                        # Skip if model config is None (e.g., all fields commented out)
+                        if model_spec_config is not None:
+                            model_specs[model_name] = ModelSpec(**model_spec_config)
+
+                config_model_providers[provider_name] = ModelProvider(
+                    **provider_config,
+                    models=model_specs
+                )
             config.model_providers = config_model_providers
         else:
             raise ConfigError("No model providers provided")
 
-        # Parse models and populate model_provider fields
-        models = yaml_config.get("models", None)
-        if models is not None and len(models.keys()) > 0:
-            config_models: dict[str, ModelConfig] = {}
-            for model_name, model_config in models.items():
-                if model_config["model_provider"] not in config_model_providers:
-                    raise ConfigError(f"Model provider {model_config['model_provider']} not found")
-                config_models[model_name] = ModelConfig(**model_config)
-                config_models[model_name].model_provider = config_model_providers[
-                    model_config["model_provider"]
-                ]
-            config.models = config_models
-        else:
-            raise ConfigError("No models provided")
+        # Helper function to resolve provider and model
+        def resolve_model_config(
+            provider_name: str | None,
+            model_name: str | None,
+            context: str = ""
+        ) -> ModelConfig:
+            # Priority: specified provider/model -> default_provider -> error
+            resolved_provider_name = provider_name or config.default_provider
+            if not resolved_provider_name:
+                raise ConfigError(f"No provider specified and no default_provider configured{context}")
+
+            if resolved_provider_name not in config_model_providers:
+                raise ConfigError(f"Provider '{resolved_provider_name}' not found{context}")
+
+            provider = config_model_providers[resolved_provider_name]
+
+            # Resolve model name
+            resolved_model_name = model_name or provider.default_model
+            if not resolved_model_name:
+                raise ConfigError(
+                    f"No model specified and no default_model configured for provider '{resolved_provider_name}'{context}"
+                )
+
+            return ModelConfig.from_provider_and_model(provider, resolved_model_name)
 
         # Parse lakeview config
         lakeview = yaml_config.get("lakeview", None)
         if lakeview is not None:
-            lakeview_model_name = lakeview.get("model", None)
-            if lakeview_model_name is None:
-                raise ConfigError("No model provided for lakeview")
-            lakeview_model = config_models[lakeview_model_name]
+            lakeview_provider = lakeview.get("provider", None)
+            lakeview_model = lakeview.get("model", None)
+            lakeview_model_config = resolve_model_config(
+                lakeview_provider,
+                lakeview_model,
+                context=" for lakeview"
+            )
             config.lakeview = LakeviewConfig(
-                model=lakeview_model,
+                model=lakeview_model_config,
+                provider=lakeview_provider,
+                model_name=lakeview_model
             )
         else:
             config.lakeview = None
@@ -302,21 +450,24 @@ class Config:
         agents = yaml_config.get("agents", None)
         if agents is not None and len(agents.keys()) > 0:
             for agent_name, agent_config in agents.items():
-                agent_model_name = agent_config.get("model", None)
-                if agent_model_name is None:
-                    raise ConfigError(f"No model provided for {agent_name}")
-                try:
-                    agent_model = config_models[agent_model_name]
-                except KeyError as e:
-                    raise ConfigError(f"Model {agent_model_name} not found") from e
+                agent_provider = agent_config.pop("provider", None) if isinstance(agent_config, dict) else None
+                agent_model = agent_config.pop("model", None) if isinstance(agent_config, dict) else None
+                agent_model_config = resolve_model_config(
+                    agent_provider,
+                    agent_model,
+                    context=f" for agent '{agent_name}'"
+                )
+
                 match agent_name:
                     case "trae_agent":
                         trae_agent_config = TraeAgentConfig(
                             **agent_config,
                             mcp_servers_config=mcp_servers_config,
                             allow_mcp_servers=allow_mcp_servers,
+                            provider=agent_provider,
+                            model_name=agent_model
                         )
-                        trae_agent_config.model = agent_model
+                        trae_agent_config.model = agent_model_config
                         if trae_agent_config.enable_lakeview and config.lakeview is None:
                             raise ConfigError("Lakeview is enabled but no lakeview config provided")
                         config.trae_agent = trae_agent_config
@@ -325,8 +476,10 @@ class Config:
                             **agent_config,
                             mcp_servers_config=mcp_servers_config,
                             allow_mcp_servers=allow_mcp_servers,
+                            provider=agent_provider,
+                            model_name=agent_model
                         )
-                        rca_agent_config.model = agent_model
+                        rca_agent_config.model = agent_model_config
                         config.rca_agent = rca_agent_config
                     case _:
                         raise ConfigError(f"Unknown agent: {agent_name}")
@@ -343,28 +496,69 @@ class Config:
         api_key: str | None = None,
         max_steps: int | None = None,
     ):
+        """
+        Resolve configuration values with priority: CLI > config file > defaults.
+        """
         if self.trae_agent:
-            self.trae_agent.resolve_config_values(
-                max_steps=max_steps,
-            )
-            self.trae_agent.model.resolve_config_values(
-                model_providers=self.model_providers,
-                provider=provider,
-                model=model,
-                model_base_url=model_base_url,
-                api_key=api_key,
-            )
+            self.trae_agent.resolve_config_values(max_steps=max_steps)
+
+            # Resolve provider and model with priority: CLI > agent config > default_provider
+            resolved_provider_name = provider or self.trae_agent.provider or self.default_provider
+            if resolved_provider_name and self.model_providers:
+                if resolved_provider_name in self.model_providers:
+                    provider_obj = self.model_providers[resolved_provider_name]
+                    resolved_model_name = model or self.trae_agent.model_name or provider_obj.default_model
+
+                    if resolved_model_name:
+                        # Create new ModelConfig with resolved provider and model
+                        self.trae_agent.model = ModelConfig.from_provider_and_model(
+                            provider_obj,
+                            resolved_model_name
+                        )
+                        # Override API key and base URL if provided via CLI
+                        self.trae_agent.model.resolve_config_values(
+                            model_providers=self.model_providers,
+                            provider=resolved_provider_name,
+                            model=resolved_model_name,
+                            model_base_url=model_base_url,
+                            api_key=api_key,
+                        )
+                    else:
+                        raise ConfigError(
+                            f"No model specified and no default_model for provider '{resolved_provider_name}'"
+                        )
+                else:
+                    raise ConfigError(f"Provider '{resolved_provider_name}' not found")
+
         if self.rca_agent:
-            self.rca_agent.resolve_config_values(
-                max_steps=max_steps,
-            )
-            self.rca_agent.model.resolve_config_values(
-                model_providers=self.model_providers,
-                provider=provider,
-                model=model,
-                model_base_url=model_base_url,
-                api_key=api_key,
-            )
+            self.rca_agent.resolve_config_values(max_steps=max_steps)
+
+            # Same logic for rca_agent
+            resolved_provider_name = provider or self.rca_agent.provider or self.default_provider
+            if resolved_provider_name and self.model_providers:
+                if resolved_provider_name in self.model_providers:
+                    provider_obj = self.model_providers[resolved_provider_name]
+                    resolved_model_name = model or self.rca_agent.model_name or provider_obj.default_model
+
+                    if resolved_model_name:
+                        self.rca_agent.model = ModelConfig.from_provider_and_model(
+                            provider_obj,
+                            resolved_model_name
+                        )
+                        self.rca_agent.model.resolve_config_values(
+                            model_providers=self.model_providers,
+                            provider=resolved_provider_name,
+                            model=resolved_model_name,
+                            model_base_url=model_base_url,
+                            api_key=api_key,
+                        )
+                    else:
+                        raise ConfigError(
+                            f"No model specified and no default_model for provider '{resolved_provider_name}'"
+                        )
+                else:
+                    raise ConfigError(f"Provider '{resolved_provider_name}' not found")
+
         return self
 
     @classmethod

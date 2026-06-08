@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import AsyncExitStack
 from enum import Enum
 
@@ -100,5 +101,12 @@ class MCPClient:
 
     async def cleanup(self, mcp_server_name):
         """Clean up resources"""
-        await self.exit_stack.aclose()
-        self.update_mcp_server_status(mcp_server_name, MCPServerStatus.DISCONNECTED)
+        try:
+            await self.exit_stack.aclose()
+        except (Exception, asyncio.CancelledError) as e:
+            # Log the error but don't fail the cleanup process
+            # This can happen when the MCP server process has already terminated
+            import logging
+            logging.getLogger(__name__).warning(f"Error closing MCP client exit stack: {e}")
+        finally:
+            self.update_mcp_server_status(mcp_server_name, MCPServerStatus.DISCONNECTED)

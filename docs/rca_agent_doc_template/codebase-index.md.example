@@ -1,0 +1,92 @@
+# 代码库索引
+
+> **生成日期**: YYYY-MM-DD
+> **文档版本**: 1.0
+
+---
+
+## 概述
+
+本文档是代码库的总索引，用于 RCA Agent 快速定位故障相关的子项目和业务域。
+
+---
+
+## 子项目列表
+
+| 子项目 | 描述 | 代码路径 | 文档路径 | 业务域关键词 |
+|--------|------|---------|----------|-------------|
+| project1 | 订单服务 | `project1/` | `doc/project1/` | order, 订单, oms |
+| project2 | 库存服务 | `project2/` | `doc/project2/` | inventory, 库存, wms |
+| project3 | 用户服务 | `project3/` | `doc/project3/` | user, 用户, ums |
+
+---
+
+## 业务域映射表
+
+| 业务域 | 子项目 | 容器名模式 | 典型故障 |
+|--------|--------|-----------|----------|
+| 订单 | project1 | `project1-server`, `project1-gateway` | 创建失败、状态异常 |
+| 库存 | project2 | `project2-server` | 扣减失败、库存不足 |
+| 用户 | project3 | `project3-server` | 登录失败、权限异常 |
+
+---
+
+## 项目结构
+
+```
+<workspace>/
+├── doc/
+│   ├── codebase-index.md           # 本文件 - 总索引
+│   ├── project1/
+│   │   ├── project-index.md       # 子项目索引（必须）
+│   │   └── business/              # 业务文档
+│   │       ├── business-index.md  # 业务文档索引
+│   │       └── business-1.md      # 具体业务文档
+│   ├── project2/
+│   │   ├── project-index.md
+│   │   └── business/
+│   └── project3/
+│       ├── project-index.md
+│       └── business/
+├── project1/                      # 子项目代码
+├── project2/
+└── project3/
+```
+
+---
+
+## RCA Agent 使用指南
+
+### 故障定位流程
+
+1. **识别业务域**: 根据故障描述中的关键词匹配业务域
+2. **定位子项目**: 根据业务域找到对应的子项目
+3. **加载项目配置**: 读取 `doc/<subproject>/project-index.md`
+4. **提取关键信息**: 
+   - 容器名称 (`container_names`)
+   - 日志关键词 (`log_keywords`)
+   - 入口代码位置 (`code_locations`)
+
+### 关键词匹配规则
+
+| 故障描述关键词 | 对应业务域 | 对应子项目 |
+|---------------|-----------|-----------|
+| 订单、oms、order | 订单 | project1 |
+| 库存、wms、inventory | 库存 | project2 |
+| 用户、ums、user | 用户 | project3 |
+
+---
+
+## 子项目快速导航
+
+- [project1 子项目索引](project1/project-index.md) - 订单服务
+- [project2 子项目索引](project2/project-index.md) - 库存服务
+- [project3 子项目索引](project3/project-index.md) - 用户服务
+
+---
+
+## 更新记录
+
+| 日期 | 更新内容 | 更新人 |
+|------|---------|--------|
+| YYYY-MM-DD | 初始化文档 | - |

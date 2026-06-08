@@ -1,0 +1,82 @@
+# 业务文档索引
+
+> **生成日期**: YYYY-MM-DD
+> **文档版本**: 1.0
+> **所属项目**: project1
+
+---
+
+## 概述
+
+本文档列出 project1 项目的所有业务文档，按业务域分类。RCA Agent 可根据故障描述中的关键词快速定位相关业务文档。
+
+---
+
+## 文档目录
+
+业务文档位于：`doc/project1/business/`
+
+```
+doc/project1/business/
+├── business-index.md    # 本文件 - 业务文档索引
+├── business-1.md        # 订单创建
+├── business-2.md        # 订单取消
+└── business-3.md        # 订单查询
+```
+
+---
+
+## 业务域列表
+
+| 业务域 | 文档名 | 文件路径 | 描述 | 关键词 |
+|--------|--------|---------|------|--------|
+| 订单创建 | business-1.md | [business-1.md](business-1.md) | 订单创建流程 | 创建订单, createOrder, 下单 |
+| 订单取消 | business-2.md | [business-2.md](business-2.md) | 订单取消流程 | 取消订单, cancelOrder, 退单 |
+| 订单查询 | business-3.md | [business-3.md](business-3.md) | 订单查询流程 | 查询订单, queryOrder, getOrder |
+
+---
+
+## 业务域与容器映射
+
+| 业务域 | 相关容器 | 主要服务类 |
+|--------|----------|-----------|
+| 订单创建 | `project1-server` | CreateOrderService |
+| 订单取消 | `project1-server` | CancelOrderService |
+| 订单查询 | `project1-server`, `project1-gateway` | QueryOrderService |
+
+---
+
+## 故障快速定位
+
+### 按故障类型查找文档
+
+| 故障类型 | 关键词 | 推荐文档 |
+|----------|--------|----------|
+| 创建失败 | 创建, create, 下单 | [business-1.md](business-1.md) |
+| 取消失败 | 取消, cancel, 退单 | [business-2.md](business-2.md) |
+| 查询失败 | 查询, query, get | [business-3.md](business-3.md) |
+
+### 按日志关键词查找文档
+
+| 日志关键词 | 业务域 | 推荐文档 |
+|-----------|--------|----------|
+| 【订单创建】 | 订单创建 | [business-1.md](business-1.md) |
+| 【订单取消】 | 订单取消 | [business-2.md](business-2.md) |
+| 【订单查询】 | 订单查询 | [business-3.md](business-3.md) |
+
+---
+
+## 常用业务术语
+
+| 术语 | 英文 | 描述 | 相关文档 |
+|------|------|------|----------|
+| 订单号 | orderId | 订单唯一标识 | business-1.md |
+| 外部订单号 | outOrderId | 外部系统订单号 | business-1.md |
+| 订单状态 | orderStatus | 订单当前状态 | business-3.md |
+
+---
+
+## 相关链接
+
+- [project1 子项目索引](../project-index.md)
+- [代码库总索引](../../codebase-index.md)
