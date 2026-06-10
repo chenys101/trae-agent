@@ -270,7 +270,8 @@ class AgentConfig:
 @dataclass
 class TraeAgentConfig(AgentConfig):
     """
-    Trae agent configuration.
+    通用 Agent 配置，通过 system_prompt + tools 驱动不同行为。
+    类似 Claude Code 的设计：一个 Agent，配置决定角色。
     """
 
     enable_lakeview: bool = True
@@ -282,31 +283,9 @@ class TraeAgentConfig(AgentConfig):
             "task_done",
         ]
     )
-
-    def resolve_config_values(
-        self,
-        *,
-        max_steps: int | None = None,
-    ):
-        resolved_value = resolve_config_value(cli_value=max_steps, config_value=self.max_steps)
-        if resolved_value:
-            self.max_steps = int(resolved_value)
-
-
-@dataclass
-class RCAAgentConfig(AgentConfig):
-    """
-    RCA agent configuration.
-    """
-
-    tools: list[str] = field(
-        default_factory=lambda: [
-            "business_analysis",
-            "log_analysis",
-            "task_done",
-        ]
-    )
-
+    # 自定义系统提示词：文件路径或内联文本，为 None 时使用默认 coding prompt
+    system_prompt: str | None = None
+    # RCA 相关配置
     codebase: str = ""
     doc_path: str = "doc"
 
@@ -344,7 +323,8 @@ class Config:
     # models: dict[str, ModelConfig] | None = None
 
     trae_agent: TraeAgentConfig | None = None
-    rca_agent: RCAAgentConfig | None = None
+    # rca_agent 保留为向后兼容的配置入口，内部统一使用 TraeAgentConfig
+    rca_agent: TraeAgentConfig | None = None
 
     @classmethod
     def create(
@@ -472,7 +452,8 @@ class Config:
                             raise ConfigError("Lakeview is enabled but no lakeview config provided")
                         config.trae_agent = trae_agent_config
                     case "rca_agent":
-                        rca_agent_config = RCAAgentConfig(
+                        # RCA agent 统一使用 TraeAgentConfig，通过 system_prompt + tools 区分行为
+                        rca_agent_config = TraeAgentConfig(
                             **agent_config,
                             mcp_servers_config=mcp_servers_config,
                             allow_mcp_servers=allow_mcp_servers,
@@ -499,53 +480,24 @@ class Config:
         """
         Resolve configuration values with priority: CLI > config file > defaults.
         """
-        if self.trae_agent:
-            self.trae_agent.resolve_config_values(max_steps=max_steps)
+        # 统一解析所有 agent 配置（trae_agent 和 rca_agent 均为 TraeAgentConfig）
+        for agent_config in [self.trae_agent, self.rca_agent]:
+            if agent_config is None:
+                continue
+            agent_config.resolve_config_values(max_steps=max_steps)
 
-            # Resolve provider and model with priority: CLI > agent config > default_provider
-            resolved_provider_name = provider or self.trae_agent.provider or self.default_provider
+            resolved_provider_name = provider or agent_config.provider or self.default_provider
             if resolved_provider_name and self.model_providers:
                 if resolved_provider_name in self.model_providers:
                     provider_obj = self.model_providers[resolved_provider_name]
-                    resolved_model_name = model or self.trae_agent.model_name or provider_obj.default_model
+                    resolved_model_name = model or agent_config.model_name or provider_obj.default_model
 
                     if resolved_model_name:
-                        # Create new ModelConfig with resolved provider and model
-                        self.trae_agent.model = ModelConfig.from_provider_and_model(
+                        agent_config.model = ModelConfig.from_provider_and_model(
                             provider_obj,
                             resolved_model_name
                         )
-                        # Override API key and base URL if provided via CLI
-                        self.trae_agent.model.resolve_config_values(
-                            model_providers=self.model_providers,
-                            provider=resolved_provider_name,
-                            model=resolved_model_name,
-                            model_base_url=model_base_url,
-                            api_key=api_key,
-                        )
-                    else:
-                        raise ConfigError(
-                            f"No model specified and no default_model for provider '{resolved_provider_name}'"
-                        )
-                else:
-                    raise ConfigError(f"Provider '{resolved_provider_name}' not found")
-
-        if self.rca_agent:
-            self.rca_agent.resolve_config_values(max_steps=max_steps)
-
-            # Same logic for rca_agent
-            resolved_provider_name = provider or self.rca_agent.provider or self.default_provider
-            if resolved_provider_name and self.model_providers:
-                if resolved_provider_name in self.model_providers:
-                    provider_obj = self.model_providers[resolved_provider_name]
-                    resolved_model_name = model or self.rca_agent.model_name or provider_obj.default_model
-
-                    if resolved_model_name:
-                        self.rca_agent.model = ModelConfig.from_provider_and_model(
-                            provider_obj,
-                            resolved_model_name
-                        )
-                        self.rca_agent.model.resolve_config_values(
+                        agent_config.model.resolve_config_values(
                             model_providers=self.model_providers,
                             provider=resolved_provider_name,
                             model=resolved_model_name,
@@ -624,9 +576,6 @@ class Config:
             lakeview=lakeview_config,
             model_providers={
                 legacy_config.default_provider: model_provider,
-            },
-            models={
-                "default_model": model_config,
             },
         )
 

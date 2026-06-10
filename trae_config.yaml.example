@@ -102,6 +102,8 @@ agents:
     model: claude-4-sonnet  # 可选，不指定则使用provider的default_model
     max_steps: 15
     codebase: G:/workspace_master
+    # 自定义系统提示词：文件路径或内联文本，为 None 时使用默认 coding prompt
+    # system_prompt: trae_agent/prompt/templates/rca_agent.md
     tools:
       - business_analysis
       - log_analysis

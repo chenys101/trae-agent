@@ -47,9 +47,11 @@ class TestTraeAgentExtended(unittest.TestCase):
         self.llm_client_patcher.stop()
 
     def test_new_task_initialization(self):
-        with self.assertRaises(AgentError):
-            self.agent.new_task("test", {})  # Missing required params
+        # 通用 Agent 不再强制要求 project_path，空 extra_args 也能正常工作
+        self.agent.new_task("test", {})
+        self.assertEqual(self.agent.task, "test")
 
+        # Coding 场景：project_path + issue
         valid_args = {
             "project_path": self.test_project_path,
             "issue": "Test issue",

@@ -793,12 +793,12 @@ def rca_report(
     """
     Generate an RCA (Root Cause Analysis) report based on a fault description.
     
-    Uses RCAAgent with LLM reasoning + tool calls to perform comprehensive analysis.
+    Uses TraeAgent with RCA-specific tools and prompt to perform comprehensive analysis.
     
     Example usage:
         trae-agent rca-report "Authentication failure in login service" -c /path/to/codebase -o rca_report.md
     """
-    from trae_agent.agent.agent import Agent, AgentType
+    from trae_agent.agent.agent import Agent
     from trae_agent.utils.config import Config, ConfigError
     from trae_agent.utils.cli.simple_console import SimpleCLIConsole
     from trae_agent.utils.cli.cli_console import ConsoleMode
@@ -860,9 +860,9 @@ def rca_report(
         # Create CLI console for real-time status updates
         cli_console = SimpleCLIConsole(mode=ConsoleMode.RUN, lakeview_config=config.lakeview if hasattr(config, "lakeview") else None)
         
-        # Create RCAAgent
+        # 创建 Agent（使用 rca_agent 配置，内部统一为 TraeAgent）
         agent = Agent(
-            AgentType.RCAAgent,
+            "rca_agent",
             config,
             trajectory_file=trajectory_file,
             cli_console=cli_console,
@@ -883,7 +883,7 @@ def rca_report(
             extra_args["output_file"] = f"rca_report-{timestamp}.md"
         
         # Run analysis using Agent.run() which handles MCP initialization/cleanup
-        console.print("\n[blue]🚀 RCAAgent starting analysis...[/blue]")
+        console.print("\n[blue]🚀 Starting RCA analysis...[/blue]")
         
         execution = asyncio.run(
             agent.run(
