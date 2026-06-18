@@ -23,7 +23,7 @@
 **目标**：建立目录结构、go module、CLI 入口、配置加载，能 `trae --version` 和 `trae show-config`。
 
 **任务**：
-1. 初始化 `v2/go.mod`、`v2/cmd/trae/main.go`
+1. 初始化 `go.mod`（`github.com/bytedance/trae-agent`）、`cmd/trae/main.go`
 2. cobra 根命令 + `version` / `show-config` 子命令
 3. `internal/config`：YAML 多级加载（默认 / 用户 / 项目 / flag）
 4. `internal/logger`：slog 初始化，写 `~/.trae/logs/`
@@ -191,7 +191,7 @@
 
 ## M8：打磨与发布
 
-**目标**：可发布 v2.0.0。
+**目标**：可发布 v1.0.0。
 
 **任务**：
 1. `internal/trajectory/recorder.go`：轨迹 JSON 记录
@@ -225,7 +225,7 @@ M0 ── M1 ── M2 ── M3 ── M4 ── M5
 - M6、M7 可与 M4/M5 部分并行
 - M8 必须最后
 
-## 后续迭代（v2.1+）
+## 后续迭代（v1.1+）
 
 - 配置即代码（`.trae/` 项目配置）
 - OpenTelemetry trace 导出

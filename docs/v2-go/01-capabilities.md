@@ -1,10 +1,10 @@
 # 能力对标：vs Claude Code / Cursor CLI
 
-本文档逐项对标 Claude Code 与 Cursor CLI 的核心能力，明确 v2 必须达到的基线，以及差异化方向。
+本文档逐项对标 Claude Code 与 Cursor CLI 的核心能力，明确必须达到的基线，以及差异化方向。
 
 ## 对标总览
 
-| 能力域 | Claude Code | Cursor CLI | trae-agent v2 目标 | 优先级 |
+| 能力域 | Claude Code | Cursor CLI | trae-agent 目标 | 优先级 |
 |--------|------------|------------|------------------|--------|
 | 流式输出 | ✅ 逐 token | ✅ 逐 token | ✅ 必须达到 | P0 |
 | 可中断 | ✅ Ctrl+C / ESC | ✅ | ✅ 必须达到 | P0 |
@@ -26,7 +26,7 @@
 
 **Claude Code 行为**：LLM 回复逐 token 流式渲染到终端，工具调用过程实时显示，`Ctrl+C` 中断当前 LLM 调用或工具执行，回到提示符。
 
-**v2 验收标准**：
+**验收标准**：
 - LLM 响应通过 SSE / stream API 接收，每 token 即时打印
 - 工具执行期间显示进度（如 `● Running bash...`）
 - `Ctrl+C` 一次：中断当前步骤，保留已生成内容，回到提示符
@@ -37,7 +37,7 @@
 
 **Claude Code 内置命令**（参考）：`/help` `/clear` `/compact` `/model` `/resume` `/agents` `/cost` `/init` `/review` `/bug` `/config` `/login` `/logout` `/status` `/memory` `/mcp` `/permissions` `/terminal-setup` `/vim` `/release-notes` `/doctor`
 
-**v2 MVP 命令集**：
+**MVP 命令集**：
 
 | 命令 | 功能 |
 |------|------|
@@ -53,7 +53,7 @@
 | `/cost` | 显示累计 token 与估算费用 |
 | `/exit` | 退出 |
 
-**v2 验收标准**：
+**验收标准**：
 - 输入 `/` 自动补全命令名
 - 命令参数支持 `--flag value` 形式
 - 未知命令给出建议（模糊匹配）
@@ -63,7 +63,7 @@
 
 **对标 Claude Code 工具语义**：
 
-| 工具 | 语义 | v2 实现 |
+| 工具 | 语义 | 实现 |
 |------|------|---------|
 | `Read` | 读文件，支持行号、offset/limit | 内置 |
 | `Write` | 写文件（覆盖） | 内置 |
@@ -74,7 +74,7 @@
 | `TodoWrite` | 任务清单管理 | 内置 |
 | `Task` | 派发子 agent（P1） | 内置 |
 
-**v2 验收标准**：
+**验收标准**：
 - 每个工具有清晰的 JSON schema，LLM 可正确调用
 - 工具结果按 Claude Code 风格格式化（行号、文件链接）
 - 支持并行工具调用（同一 LLM 响应中多个 tool_call 并发执行）
@@ -82,7 +82,7 @@
 
 ### 4. 多 LLM Provider
 
-**v2 必须支持**：
+**必须支持**：
 - Anthropic（Claude 系列）
 - OpenAI（GPT 系列）
 - Google（Gemini）
@@ -90,7 +90,7 @@
 - Ollama（本地）
 - 任意 OpenAI 兼容端点（`base_url` 可配）
 
-**v2 验收标准**：
+**验收标准**：
 - 统一的 `Provider` 接口，新增 provider 只实现接口
 - 流式响应统一抽象为 `<-chan StreamEvent`
 - 工具调用格式自动适配各 provider 差异
@@ -102,7 +102,7 @@
 
 **Claude Code 行为**：主 agent 通过 Task 工具派发独立子 agent，子 agent 有自己的上下文和工具集，并行执行，完成后返回摘要。主 agent 上下文不被子 agent 的细节污染。
 
-**v2 验收标准**：
+**验收标准**：
 - `Task` 工具参数：`subagent_type`、`description`、`prompt`
 - 子 agent 拥有独立 message history，不共享主上下文
 - 多个 Task 调用可并行（goroutine + channel 汇总）
@@ -113,7 +113,7 @@
 
 **Claude Code 行为**：当上下文接近 token 上限时，自动用一次 LLM 调用压缩历史对话，保留任务目标和关键决策，丢弃细节。
 
-**v2 验收标准**：
+**验收标准**：
 - 实时统计当前上下文 token 数
 - 达到阈值（默认 80%）自动触发 compact
 - compact 后注入摘要消息，保留 system prompt 和最近 N 轮
@@ -122,7 +122,7 @@
 
 ### 7. 会话 resume
 
-**v2 验收标准**：
+**验收标准**：
 - 每个会话自动持久化到 `~/.trae/sessions/<id>.json`
 - `/resume` 列出最近会话（时间、任务摘要、步数）
 - 选择后恢复完整 message history 和工具状态
@@ -130,7 +130,7 @@
 
 ### 8. MCP 支持
 
-**v2 验收标准**：
+**验收标准**：
 - 兼容 MCP 规范（stdio / SSE 传输）
 - 配置文件声明 MCP server，启动时自动连接并发现工具
 - MCP 工具与内置工具统一调度
@@ -140,7 +140,7 @@
 
 **Claude Code 行为**：工具调用前根据策略决定 allow / ask / deny，危险操作（如 `rm -rf`、写仓库外文件）需用户确认。
 
-**v2 验收标准**：
+**验收标准**：
 - 权限策略文件 `~/.trae/permissions.json`
 - 策略维度：工具名、命令模式、路径 glob
 - 三种决策：`allow` / `ask` / `deny`
@@ -169,6 +169,6 @@
 
 ## 不对标的能力（明确放弃）
 
-- **IDE 内嵌**：Claude Code 有 VS Code 扩展，v2 不做
+- **IDE 内嵌**：Claude Code 有 VS Code 扩展，本期不做
 - **全屏 TUI**：保持流式文本，不做 bubbletea 全屏应用
 - **多模态输入**：图片 / 截图输入暂不支持

@@ -58,71 +58,71 @@
 ## 目录结构
 
 ```
-trae-agent/                      # 仓库根
-├── docs/v2-go/                  # 本设计文档
-├── trae_agent/                  # 旧 Python 实现（保留）
-├── v2/                          # 新 Go 实现根
-│   ├── go.mod
-│   ├── go.sum
-│   ├── cmd/
-│   │   └── trae/
-│   │       └── main.go          # CLI 入口
-│   ├── internal/
-│   │   ├── agent/               # Agent Runtime
-│   │   │   ├── agent.go         # Agent 接口与基础实现
-│   │   │   ├── loop.go          # think-act 循环
-│   │   │   ├── context.go       # 上下文管理 / compact
-│   │   │   ├── subagent.go      # 子 agent 委派
-│   │   │   └── state.go         # 会话状态
-│   │   ├── cli/
-│   │   │   ├── repl.go          # 交互式 REPL
-│   │   │   ├── render.go        # 流式渲染
-│   │   │   ├── command.go       # 斜杠命令注册与分发
-│   │   │   ├── interrupt.go     # Ctrl+C 处理
-│   │   │   └── completion.go    # 命令补全
-│   │   ├── headless/
-│   │   │   └── runner.go        # 非交互执行
-│   │   ├── tool/
-│   │   │   ├── tool.go          # Tool 接口
-│   │   │   ├── dispatcher.go    # 并行/串行调度 + 权限门
-│   │   │   ├── read.go
-│   │   │   ├── write.go
-│   │   │   ├── edit.go
-│   │   │   ├── glob.go
-│   │   │   ├── grep.go
-│   │   │   ├── bash.go
-│   │   │   ├── todo.go
-│   │   │   └── task.go
-│   │   ├── llm/
-│   │   │   ├── provider.go      # Provider 接口 + StreamEvent
-│   │   │   ├── anthropic.go
-│   │   │   ├── openai.go
-│   │   │   ├── google.go
-│   │   │   ├── openrouter.go
-│   │   │   ├── ollama.go
-│   │   │   └── retry.go
-│   │   ├── mcp/
-│   │   │   ├── client.go        # MCP 客户端
-│   │   │   └── registry.go      # MCP 工具注册
-│   │   ├── config/
-│   │   │   ├── config.go        # 配置加载与合并
-│   │   │   └── schema.go        # 配置 schema
-│   │   ├── session/
-│   │   │   ├── store.go         # 会话持久化
-│   │   │   └── resume.go        # 会话恢复
-│   │   ├── permission/
-│   │   │   └── policy.go        # 权限策略评估
-│   │   ├── trajectory/
-│   │   │   └── recorder.go      # 轨迹记录
-│   │   └── logger/
-│   │       └── logger.go
-│   ├── pkg/                     # 可对外暴露的公共库
-│   │   ├── api/                 # SDK 入口（headless 调用）
-│   │   └── types/               # 共享类型
-│   └── test/
-│       ├── integration/
-│       └── e2e/
-└── Makefile
+trae-agent/                      # 仓库根 = Go module 根
+├── go.mod                       # module github.com/bytedance/trae-agent
+├── go.sum
+├── cmd/
+│   └── trae/
+│       └── main.go              # CLI 入口
+├── internal/
+│   ├── agent/                   # Agent Runtime
+│   │   ├── agent.go             # Agent 接口与基础实现
+│   │   ├── loop.go              # think-act 循环
+│   │   ├── context.go           # 上下文管理 / compact
+│   │   ├── subagent.go          # 子 agent 委派
+│   │   └── state.go             # 会话状态
+│   ├── cli/
+│   │   ├── repl.go              # 交互式 REPL
+│   │   ├── render.go            # 流式渲染
+│   │   ├── command.go           # 斜杠命令注册与分发
+│   │   ├── interrupt.go         # Ctrl+C 处理
+│   │   └── completion.go        # 命令补全
+│   ├── headless/
+│   │   └── runner.go            # 非交互执行
+│   ├── tool/
+│   │   ├── tool.go              # Tool 接口
+│   │   ├── dispatcher.go        # 并行/串行调度 + 权限门
+│   │   ├── read.go
+│   │   ├── write.go
+│   │   ├── edit.go
+│   │   ├── glob.go
+│   │   ├── grep.go
+│   │   ├── bash.go
+│   │   ├── todo.go
+│   │   └── task.go
+│   ├── llm/
+│   │   ├── provider.go          # Provider 接口 + StreamEvent
+│   │   ├── anthropic.go
+│   │   ├── openai.go
+│   │   ├── google.go
+│   │   ├── openrouter.go
+│   │   ├── ollama.go
+│   │   └── retry.go
+│   ├── mcp/
+│   │   ├── client.go            # MCP 客户端
+│   │   └── registry.go          # MCP 工具注册
+│   ├── config/
+│   │   ├── config.go            # 配置加载与合并
+│   │   └── schema.go            # 配置 schema
+│   ├── session/
+│   │   ├── store.go             # 会话持久化
+│   │   └── resume.go            # 会话恢复
+│   ├── permission/
+│   │   └── policy.go            # 权限策略评估
+│   ├── trajectory/
+│   │   └── recorder.go          # 轨迹记录
+│   └── logger/
+│       └── logger.go
+├── pkg/                         # 可对外暴露的公共库
+│   ├── api/                     # SDK 入口（headless 调用）
+│   └── types/                   # 共享类型
+├── test/
+│   ├── integration/
+│   └── e2e/
+├── docs/                        # 设计文档
+│   └── design/                  # 从 docs/v2-go/ 迁移
+├── Makefile
+└── .golangci.yml
 ```
 
 ## 核心抽象

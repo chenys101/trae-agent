@@ -4,7 +4,7 @@
 
 - **Go 1.22+**（要求 1.22 是为了用 `range over int`、增强的 `for` 循环、`slices`/`maps` 标准库）
 - **无 cgo**：纯 Go 静态编译，便于交叉编译与单二进制分发
-- **module path**：`github.com/bytedance/trae-agent/v2`（待确认）
+- **module path**：`github.com/bytedance/trae-agent`
 
 ## 核心依赖选型
 
@@ -110,7 +110,7 @@
 - Go 版本：1.22+
 - 最低支持 macOS 11+ / Linux glibc 2.31+
 - 不支持 32 位
-- API 稳定性：v2 内 `pkg/` 对外稳定，`internal/` 不承诺
+- API 稳定性：`pkg/` 对外稳定，`internal/` 不承诺
 
 ## 依赖总量目标
 
