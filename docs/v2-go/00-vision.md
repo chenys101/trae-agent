@@ -41,21 +41,21 @@
 - 自训练模型 / 本地推理（只对接外部 LLM API）
 - 团队协作 / 多用户（单用户单机工具）
 
-## 与现有 Python 实现的关系
+## 历史
 
-- **不兼容**：新实现不保证与 `trae_config.yaml`、Python 工具接口、轨迹文件格式向后兼容。
-- **并存**：Python 实现保留在 `trae_agent/` 目录，新实现放在仓库根的新目录（见架构文档），两者可独立构建。
-- **借鉴**：可参考 Python 实现的 prompt 设计、工具语义、轨迹记录思路，但代码全部用 Go 重写。
+本项目前身为 Python 实现（`trae_agent/`），因交互体验、并发模型、分发方式的根本性限制，决定用 Go 从零重写。Python 代码已从仓库中移除，不保留、不兼容、不共存。
+
+Go 重写时可参考原 Python 实现的设计思路（prompt 设计、工具语义、轨迹记录），但代码全部重写。
 
 ## 命名
 
-- 项目代号：**trae-agent v2**（或简称 `traev2`）
+- 项目代号：**trae-agent**
 - 二进制名：`trae`（CLI 入口）
-- Go module path：`github.com/bytedance/trae-agent/v2`（待确认，见 open-questions）
+- Go module path：`github.com/bytedance/trae-agent`
 
 ## 成功指标
 
-- 在 SWE-bench 风格的本地任务上，成功率不低于现有 Python 实现
+- 在 SWE-bench 风格的本地任务上，成功率不低于原 Python 实现
 - 冷启动到首 token < 500ms（不含 LLM 网络延迟）
 - 单二进制 < 30MB（静态编译，不含 cgo）
 - 长会话（100+ 轮）内存稳定，无泄漏
