@@ -38,11 +38,6 @@ func (t *TaskDoneTool) GetParameters() []ToolParameter {
 	}
 }
 
-// GetInputSchema 生成 JSON Schema 参数定义。
-func (t *TaskDoneTool) GetInputSchema() map[string]any {
-	return GetInputSchema(t)
-}
-
 // Execute 执行任务完成操作。
 func (t *TaskDoneTool) Execute(ctx context.Context, args map[string]any) (ToolResult, error) {
 	result, _ := args["result"].(string)

@@ -11,9 +11,16 @@ import (
 	"github.com/bytedance/trae-agent-go/internal/tool"
 )
 
+// ChatRequest encapsulates all parameters for a chat request.
+type ChatRequest struct {
+	Messages []LLMMessage
+	Config   ModelConfig
+	Tools    []tool.Tool
+}
+
 // LLMClient 是 LLM 客户端的核心接口。
 type LLMClient interface {
-	Chat(ctx context.Context, messages []LLMMessage, config ModelConfig, tools []tool.Tool) (LLMResponse, error)
+	Chat(ctx context.Context, req ChatRequest) (LLMResponse, error)
 }
 
 // LLMMessage 表示发送给 LLM 的消息。

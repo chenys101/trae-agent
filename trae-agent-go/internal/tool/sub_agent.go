@@ -11,15 +11,28 @@ import (
 
 // AgentFactory 定义创建和执行子 Agent 的抽象接口。
 // 引入此接口以便在测试中 mock 掉 Agent 的创建，同时避免 tool 包直接依赖 agent/llm 包造成循环导入。
-// modelConfig 使用 any 类型，实际使用时由 agent 包侧注入具体的 llm.ModelConfig。
 type AgentFactory interface {
 	// CreateAndExecute 使用给定的模型配置创建子 Agent 并执行任务，返回执行结果摘要。
-	CreateAndExecute(ctx context.Context, modelConfig any, maxSteps int, toolNames []string, workingDir string, task string) (string, error)
+	CreateAndExecute(ctx context.Context, modelConfig SubAgentModelConfig, maxSteps int, toolNames []string, workingDir string, task string) (string, error)
+}
+
+// SubAgentModelConfig holds the model configuration needed to create a sub-agent.
+type SubAgentModelConfig struct {
+	Model             string
+	Provider          string
+	MaxTokens         int
+	Temperature       float64
+	TopP              float64
+	TopK              int
+	MaxRetries        int
+	ParallelToolCalls bool
+	APIKey            string
+	BaseURL           string
 }
 
 // SubAgentTool 将子任务委派给新的 Agent 实例，保护主上下文窗口。
 type SubAgentTool struct {
-	parentModelConfig any
+	parentModelConfig *SubAgentModelConfig
 	agentFactory      AgentFactory
 }
 
@@ -55,11 +68,6 @@ func (s *SubAgentTool) GetParameters() []ToolParameter {
 			Required:    true,
 		},
 	}
-}
-
-// GetInputSchema 生成 JSON Schema 参数定义。
-func (s *SubAgentTool) GetInputSchema() map[string]any {
-	return GetInputSchema(s)
 }
 
 // Execute 执行子 Agent 委派逻辑。
@@ -110,7 +118,7 @@ func (s *SubAgentTool) Execute(ctx context.Context, args map[string]any) (ToolRe
 	subToolNames := []string{"bash", "read_file", "grep_search", "glob_search", "edit", "task_done"}
 
 	// 通过 AgentFactory 创建并执行子 Agent
-	result, err := s.agentFactory.CreateAndExecute(ctx, s.parentModelConfig, 30, subToolNames, workingDir, taskDescription)
+	result, err := s.agentFactory.CreateAndExecute(ctx, *s.parentModelConfig, 30, subToolNames, workingDir, taskDescription)
 	if err != nil {
 		return ToolResult{
 			Success: false,
@@ -125,9 +133,8 @@ func (s *SubAgentTool) Execute(ctx context.Context, args map[string]any) (ToolRe
 }
 
 // SetParentModelConfig 设置父 Agent 的模型配置。
-// config 参数应为 llm.ModelConfig 类型，使用 any 以避免循环导入。
-func (s *SubAgentTool) SetParentModelConfig(config any) {
-	s.parentModelConfig = config
+func (s *SubAgentTool) SetParentModelConfig(config SubAgentModelConfig) {
+	s.parentModelConfig = &config
 }
 
 // SetAgentFactory 设置 Agent 工厂实例。

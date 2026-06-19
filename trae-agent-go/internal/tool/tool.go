@@ -25,9 +25,6 @@ type Tool interface {
 
 	// Execute 执行工具逻辑，返回执行结果。
 	Execute(ctx context.Context, args map[string]any) (ToolResult, error)
-
-	// GetInputSchema 生成 JSON Schema 格式的参数定义，用于 LLM function calling。
-	GetInputSchema() map[string]any
 }
 
 // ToolParameter 定义工具的单个参数。

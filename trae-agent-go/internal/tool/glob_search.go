@@ -47,11 +47,6 @@ func (g *GlobSearchTool) GetParameters() []ToolParameter {
 	}
 }
 
-// GetInputSchema 生成 JSON Schema 参数定义。
-func (g *GlobSearchTool) GetInputSchema() map[string]any {
-	return GetInputSchema(g)
-}
-
 // Execute 执行 glob 搜索。
 func (g *GlobSearchTool) Execute(ctx context.Context, args map[string]any) (ToolResult, error) {
 	pattern, _ := args["pattern"].(string)

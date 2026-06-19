@@ -19,7 +19,7 @@ type mockLLMClient struct {
 	callIndex int
 }
 
-func (m *mockLLMClient) Chat(ctx context.Context, messages []llm.LLMMessage, config llm.ModelConfig, tools []tool.Tool) (llm.LLMResponse, error) {
+func (m *mockLLMClient) Chat(ctx context.Context, req llm.ChatRequest) (llm.LLMResponse, error) {
 	if m.callIndex >= len(m.responses) {
 		// 默认返回空响应
 		return llm.LLMResponse{
@@ -42,7 +42,6 @@ type mockTool struct {
 func (m *mockTool) GetName() string                                          { return m.name }
 func (m *mockTool) GetDescription() string                                   { return m.description }
 func (m *mockTool) GetParameters() []tool.ToolParameter                      { return nil }
-func (m *mockTool) GetInputSchema() map[string]any                           { return nil }
 func (m *mockTool) Execute(ctx context.Context, args map[string]any) (tool.ToolResult, error) {
 	if m.executeFunc != nil {
 		return m.executeFunc(ctx, args)

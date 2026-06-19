@@ -4,7 +4,12 @@
 // Package agent 定义了 Agent 执行循环的核心数据结构。
 package agent
 
-import "time"
+import (
+	"time"
+
+	"github.com/bytedance/trae-agent-go/internal/llm"
+	"github.com/bytedance/trae-agent-go/internal/tool"
+)
 
 // AgentStepState 表示 Agent 单步执行的状态。
 type AgentStepState string
@@ -27,27 +32,11 @@ const (
 	StateError     AgentState = "error"
 )
 
-// ToolCallInfo 记录 LLM 发起的工具调用信息。
-type ToolCallInfo struct {
-	Name      string         `json:"name"`
-	CallID    string         `json:"call_id"`
-	Arguments map[string]any `json:"arguments"`
-}
-
-// ToolResultInfo 记录工具执行的返回结果。
-type ToolResultInfo struct {
-	CallID  string `json:"call_id"`
-	Name    string `json:"name"`
-	Success bool   `json:"success"`
-	Output  string `json:"output,omitempty"`
-	Error   string `json:"error,omitempty"`
-}
-
 // LLMResponseInfo 记录 LLM 的响应信息。
 type LLMResponseInfo struct {
-	Content    string         `json:"content"`
-	ToolCalls  []ToolCallInfo `json:"tool_calls,omitempty"`
-	StopReason string         `json:"stop_reason"`
+	Content    string           `json:"content"`
+	ToolCalls  []llm.ToolCallInfo `json:"tool_calls,omitempty"`
+	StopReason string           `json:"stop_reason"`
 }
 
 // AgentStep 表示 Agent 执行过程中的单个步骤。
@@ -55,8 +44,8 @@ type AgentStep struct {
 	StepNumber  int              `json:"step_number"`
 	State       AgentStepState   `json:"state"`
 	Thought     string           `json:"thought,omitempty"`
-	ToolCalls   []ToolCallInfo   `json:"tool_calls,omitempty"`
-	ToolResults []ToolResultInfo `json:"tool_results,omitempty"`
+	ToolCalls   []llm.ToolCallInfo `json:"tool_calls,omitempty"`
+	ToolResults []tool.ToolResult  `json:"tool_results,omitempty"`
 	LLMResponse *LLMResponseInfo `json:"llm_response,omitempty"`
 	Reflection  string           `json:"reflection,omitempty"`
 	Error       string           `json:"error,omitempty"`

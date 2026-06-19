@@ -9,17 +9,10 @@ import (
 	"testing"
 )
 
-// mockModelConfig 是测试用的模型配置，模拟 llm.ModelConfig 的结构。
-type mockModelConfig struct {
-	Model    string
-	Provider string
-	APIKey   string
-}
-
 // mockAgentFactory 是测试用的 AgentFactory mock 实现。
 type mockAgentFactory struct {
 	createAndExecuteCalled bool
-	lastModelConfig       any
+	lastModelConfig       SubAgentModelConfig
 	lastMaxSteps          int
 	lastToolNames         []string
 	lastWorkingDir        string
@@ -28,7 +21,7 @@ type mockAgentFactory struct {
 	err                   error
 }
 
-func (m *mockAgentFactory) CreateAndExecute(ctx context.Context, modelConfig any, maxSteps int, toolNames []string, workingDir string, task string) (string, error) {
+func (m *mockAgentFactory) CreateAndExecute(ctx context.Context, modelConfig SubAgentModelConfig, maxSteps int, toolNames []string, workingDir string, task string) (string, error) {
 	m.createAndExecuteCalled = true
 	m.lastModelConfig = modelConfig
 	m.lastMaxSteps = maxSteps
@@ -102,14 +95,14 @@ func TestSubAgentToolExecution(t *testing.T) {
 		result: "Sub-agent completed successfully. Steps: 3, Tokens: input=100 output=50, Time: 1.5s",
 	}
 
-	config := &mockModelConfig{
+	config := SubAgentModelConfig{
 		Model:    "test-model",
 		Provider: "anthropic",
 		APIKey:   "test-key",
 	}
 
 	tool := &SubAgentTool{
-		parentModelConfig: config,
+		parentModelConfig: &config,
 		agentFactory:      mock,
 	}
 
@@ -159,10 +152,7 @@ func TestSubAgentToolExecution(t *testing.T) {
 	}
 
 	// 验证模型配置被正确传递
-	cfg, ok := mock.lastModelConfig.(*mockModelConfig)
-	if !ok {
-		t.Fatalf("expected *mockModelConfig, got %T", mock.lastModelConfig)
-	}
+	cfg := mock.lastModelConfig
 	if cfg.Model != "test-model" {
 		t.Errorf("expected model 'test-model', got '%s'", cfg.Model)
 	}

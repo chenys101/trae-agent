@@ -26,9 +26,6 @@ func (m *openaiMockTool) GetParameters() []tool.ToolParameter { return m.paramet
 func (m *openaiMockTool) Execute(ctx context.Context, args map[string]any) (tool.ToolResult, error) {
 	return tool.ToolResult{}, nil
 }
-func (m *openaiMockTool) GetInputSchema() map[string]any {
-	return tool.GetInputSchema(m)
-}
 
 func newOpenAIMockTool() *openaiMockTool {
 	return &openaiMockTool{
@@ -133,7 +130,7 @@ func TestOpenAIClient_NormalResponse(t *testing.T) {
 		{Role: "assistant", Content: "Hi there"},
 	}
 
-	resp, err := client.Chat(context.Background(), messages, cfg, nil)
+	resp, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: nil})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -224,7 +221,7 @@ func TestOpenAIClient_ToolCallResponse(t *testing.T) {
 	}
 
 	tools := []tool.Tool{newOpenAIMockTool()}
-	resp, err := client.Chat(context.Background(), messages, cfg, tools)
+	resp, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: tools})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -317,7 +314,7 @@ func TestOpenAIClient_ToolResultMessage(t *testing.T) {
 		},
 	}
 
-	resp, err := client.Chat(context.Background(), messages, cfg, nil)
+	resp, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: nil})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -344,7 +341,7 @@ func TestOpenAIClient_ErrorResponse(t *testing.T) {
 		{Role: "user", Content: "Hello"},
 	}
 
-	_, err := client.Chat(context.Background(), messages, cfg, nil)
+	_, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: nil})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -383,7 +380,7 @@ func TestOpenAIClient_LengthStopReason(t *testing.T) {
 		{Role: "user", Content: "Tell me a long story"},
 	}
 
-	resp, err := client.Chat(context.Background(), messages, cfg, nil)
+	resp, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: nil})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -401,7 +398,7 @@ func TestOpenAIClient_EmptyContentMessage(t *testing.T) {
 		{Role: "user", Content: ""},
 	}
 
-	_, err := client.Chat(context.Background(), messages, cfg, nil)
+	_, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: nil})
 	if err == nil {
 		t.Fatal("expected error for empty content, got nil")
 	}
@@ -414,7 +411,7 @@ func TestOpenAIClient_InvalidRole(t *testing.T) {
 		{Role: "invalid_role", Content: "test"},
 	}
 
-	_, err := client.Chat(context.Background(), messages, cfg, nil)
+	_, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: nil})
 	if err == nil {
 		t.Fatal("expected error for invalid role, got nil")
 	}

@@ -8,16 +8,25 @@ import (
 	"fmt"
 
 	"github.com/bytedance/trae-agent-go/internal/llm"
+	"github.com/bytedance/trae-agent-go/internal/tool"
 )
 
 // DefaultAgentFactory 是 tool.AgentFactory 的默认实现，创建真正的 Agent。
 type DefaultAgentFactory struct{}
 
 // CreateAndExecute 创建子 Agent 并执行任务，返回执行结果摘要。
-func (f *DefaultAgentFactory) CreateAndExecute(ctx context.Context, modelConfig any, maxSteps int, toolNames []string, workingDir string, task string) (string, error) {
-	mc, ok := modelConfig.(llm.ModelConfig)
-	if !ok {
-		return "", fmt.Errorf("invalid model config type")
+func (f *DefaultAgentFactory) CreateAndExecute(ctx context.Context, modelConfig tool.SubAgentModelConfig, maxSteps int, toolNames []string, workingDir string, task string) (string, error) {
+	mc := llm.ModelConfig{
+		Model:             modelConfig.Model,
+		Provider:          modelConfig.Provider,
+		MaxTokens:         modelConfig.MaxTokens,
+		Temperature:       modelConfig.Temperature,
+		TopP:              modelConfig.TopP,
+		TopK:              modelConfig.TopK,
+		MaxRetries:        modelConfig.MaxRetries,
+		ParallelToolCalls: modelConfig.ParallelToolCalls,
+		APIKey:            modelConfig.APIKey,
+		BaseURL:           modelConfig.BaseURL,
 	}
 
 	agentConfig := AgentConfig{

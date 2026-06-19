@@ -26,9 +26,6 @@ func (m *anthropicMockTool) GetParameters() []tool.ToolParameter { return m.para
 func (m *anthropicMockTool) Execute(ctx context.Context, args map[string]any) (tool.ToolResult, error) {
 	return tool.ToolResult{}, nil
 }
-func (m *anthropicMockTool) GetInputSchema() map[string]any {
-	return tool.GetInputSchema(m)
-}
 
 func newAnthropicMockTool() *anthropicMockTool {
 	return &anthropicMockTool{
@@ -132,7 +129,7 @@ func TestAnthropicClient_NormalResponse(t *testing.T) {
 		{Role: "assistant", Content: "Hi there"},
 	}
 
-	resp, err := client.Chat(context.Background(), messages, cfg, nil)
+	resp, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: nil})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -202,7 +199,7 @@ func TestAnthropicClient_ToolCallResponse(t *testing.T) {
 	}
 
 	tools := []tool.Tool{newAnthropicMockTool()}
-	resp, err := client.Chat(context.Background(), messages, cfg, tools)
+	resp, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: tools})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -285,7 +282,7 @@ func TestAnthropicClient_ToolResultMessage(t *testing.T) {
 		},
 	}
 
-	resp, err := client.Chat(context.Background(), messages, cfg, nil)
+	resp, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: nil})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -314,7 +311,7 @@ func TestAnthropicClient_ErrorResponse(t *testing.T) {
 		{Role: "user", Content: "Hello"},
 	}
 
-	_, err := client.Chat(context.Background(), messages, cfg, nil)
+	_, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: nil})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -347,7 +344,7 @@ func TestAnthropicClient_MaxTokensStopReason(t *testing.T) {
 		{Role: "user", Content: "Tell me a long story"},
 	}
 
-	resp, err := client.Chat(context.Background(), messages, cfg, nil)
+	resp, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: nil})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -364,7 +361,7 @@ func TestAnthropicClient_EmptyContentMessage(t *testing.T) {
 		{Role: "user", Content: ""},
 	}
 
-	_, err := client.Chat(context.Background(), messages, cfg, nil)
+	_, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: nil})
 	if err == nil {
 		t.Fatal("expected error for empty content, got nil")
 	}
@@ -377,7 +374,7 @@ func TestAnthropicClient_InvalidRole(t *testing.T) {
 		{Role: "invalid_role", Content: "test"},
 	}
 
-	_, err := client.Chat(context.Background(), messages, cfg, nil)
+	_, err := client.Chat(context.Background(), ChatRequest{Messages: messages, Config: cfg, Tools: nil})
 	if err == nil {
 		t.Fatal("expected error for invalid role, got nil")
 	}

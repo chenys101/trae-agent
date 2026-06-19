@@ -19,7 +19,6 @@ type mockTool struct {
 func (m *mockTool) GetName() string                          { return m.name }
 func (m *mockTool) GetDescription() string                   { return m.description }
 func (m *mockTool) GetParameters() []ToolParameter           { return m.parameters }
-func (m *mockTool) GetInputSchema() map[string]any           { return GetInputSchema(m) }
 func (m *mockTool) Execute(ctx context.Context, args map[string]any) (ToolResult, error) {
 	if m.executeFunc != nil {
 		return m.executeFunc(ctx, args)

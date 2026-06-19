@@ -101,17 +101,20 @@ type anthropicErrorResponse struct {
 }
 
 // Chat 发送消息到 Anthropic API 并返回响应。
-func (c *AnthropicClient) Chat(ctx context.Context, messages []LLMMessage, config ModelConfig, tools []tool.Tool) (LLMResponse, error) {
+func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (LLMResponse, error) {
 	retryCfg := DefaultRetryConfig()
-	retryCfg.MaxRetries = config.MaxRetries
+	retryCfg.MaxRetries = req.Config.MaxRetries
 
 	return WithRetry(ctx, retryCfg, func() (LLMResponse, error) {
-		return c.doChat(ctx, messages, config, tools)
+		return c.doChat(ctx, req)
 	})
 }
 
 // doChat 执行实际的 Anthropic API 调用。
-func (c *AnthropicClient) doChat(ctx context.Context, messages []LLMMessage, config ModelConfig, tools []tool.Tool) (LLMResponse, error) {
+func (c *AnthropicClient) doChat(ctx context.Context, chatReq ChatRequest) (LLMResponse, error) {
+	messages := chatReq.Messages
+	config := chatReq.Config
+	tools := chatReq.Tools
 	var systemMsg string
 	var apiMessages []anthropicMessage
 
@@ -178,7 +181,7 @@ func (c *AnthropicClient) doChat(ctx context.Context, messages []LLMMessage, con
 		toolDefs = append(toolDefs, anthropicToolDef{
 			Name:        t.GetName(),
 			Description: t.GetDescription(),
-			InputSchema: t.GetInputSchema(),
+			InputSchema: tool.GetInputSchema(t),
 		})
 	}
 

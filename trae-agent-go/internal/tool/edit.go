@@ -52,11 +52,6 @@ func (e *EditTool) GetParameters() []ToolParameter {
 	}
 }
 
-// GetInputSchema 生成 JSON Schema 参数定义。
-func (e *EditTool) GetInputSchema() map[string]any {
-	return GetInputSchema(e)
-}
-
 // Execute 执行文件编辑操作。
 func (e *EditTool) Execute(ctx context.Context, args map[string]any) (ToolResult, error) {
 	filePath, _ := args["file_path"].(string)

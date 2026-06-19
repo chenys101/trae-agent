@@ -115,17 +115,20 @@ type openaiErrorResponse struct {
 }
 
 // Chat 发送消息到 OpenAI API 并返回响应。
-func (c *OpenAIClient) Chat(ctx context.Context, messages []LLMMessage, config ModelConfig, tools []tool.Tool) (LLMResponse, error) {
+func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (LLMResponse, error) {
 	retryCfg := DefaultRetryConfig()
-	retryCfg.MaxRetries = config.MaxRetries
+	retryCfg.MaxRetries = req.Config.MaxRetries
 
 	return WithRetry(ctx, retryCfg, func() (LLMResponse, error) {
-		return c.doChat(ctx, messages, config, tools)
+		return c.doChat(ctx, req)
 	})
 }
 
 // doChat 执行实际的 OpenAI API 调用。
-func (c *OpenAIClient) doChat(ctx context.Context, messages []LLMMessage, config ModelConfig, tools []tool.Tool) (LLMResponse, error) {
+func (c *OpenAIClient) doChat(ctx context.Context, chatReq ChatRequest) (LLMResponse, error) {
+	messages := chatReq.Messages
+	config := chatReq.Config
+	tools := chatReq.Tools
 	var apiMessages []openaiMessage
 
 	// 将 []LLMMessage 转换为 OpenAI API 格式
@@ -180,7 +183,7 @@ func (c *OpenAIClient) doChat(ctx context.Context, messages []LLMMessage, config
 			Function: openaiFunctionDef{
 				Name:        t.GetName(),
 				Description: t.GetDescription(),
-				Parameters:  t.GetInputSchema(),
+				Parameters:  tool.GetInputSchema(t),
 				Strict:      true,
 			},
 		})

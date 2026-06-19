@@ -53,11 +53,6 @@ func (r *ReadFileTool) GetParameters() []ToolParameter {
 	}
 }
 
-// GetInputSchema 返回 JSON Schema 格式的参数定义。
-func (r *ReadFileTool) GetInputSchema() map[string]any {
-	return GetInputSchema(r)
-}
-
 // Execute 执行文件读取操作。
 func (r *ReadFileTool) Execute(ctx context.Context, args map[string]any) (ToolResult, error) {
 	// 验证 file_path 必须提供且为字符串

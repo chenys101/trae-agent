@@ -49,11 +49,6 @@ func (b *BashTool) GetParameters() []ToolParameter {
 	}
 }
 
-// GetInputSchema 生成 JSON Schema 格式的参数定义。
-func (b *BashTool) GetInputSchema() map[string]any {
-	return GetInputSchema(b)
-}
-
 // Execute 执行 bash 命令并返回结果。
 func (b *BashTool) Execute(ctx context.Context, args map[string]any) (ToolResult, error) {
 	// 检查 restart 参数

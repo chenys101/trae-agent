@@ -144,7 +144,11 @@ func (a *Agent) ExecuteTask(ctx context.Context) (*AgentExecution, error) {
 func (a *Agent) runLLMStep(ctx context.Context, stepNumber int) error {
 	tools := a.executor.GetTools()
 
-	response, err := a.client.Chat(ctx, a.messages, a.config.ModelConfig, tools)
+	response, err := a.client.Chat(ctx, llm.ChatRequest{
+		Messages: a.messages,
+		Config:   a.config.ModelConfig,
+		Tools:    tools,
+	})
 	if err != nil {
 		return fmt.Errorf("LLM chat failed: %w", err)
 	}
@@ -161,7 +165,7 @@ func (a *Agent) runLLMStep(ctx context.Context, stepNumber int) error {
 			StepNumber: stepNumber,
 			State:      StepCallingTool,
 			Thought:    response.Content,
-			ToolCalls:  convertToolCalls(response.ToolCalls),
+			ToolCalls:  response.ToolCalls,
 		}
 
 		// 执行工具调用
@@ -175,7 +179,7 @@ func (a *Agent) runLLMStep(ctx context.Context, stepNumber int) error {
 		}
 
 		// 反思：检查失败的工具
-		agentStep.ToolResults = convertToolResults(toolResults)
+		agentStep.ToolResults = toolResults
 		var reflection string
 		for _, tr := range toolResults {
 			if !tr.Success {
@@ -254,26 +258,13 @@ func compressMessages(messages []llm.LLMMessage) []llm.LLMMessage {
 }
 
 // hasTaskDone 检查工具调用列表中是否包含 task_done。
-func hasTaskDone(toolCalls []ToolCallInfo) bool {
+func hasTaskDone(toolCalls []llm.ToolCallInfo) bool {
 	for _, tc := range toolCalls {
 		if tc.Name == "task_done" {
 			return true
 		}
 	}
 	return false
-}
-
-// convertToolCalls 将 llm.ToolCallInfo 转换为 agent 包的 ToolCallInfo。
-func convertToolCalls(calls []llm.ToolCallInfo) []ToolCallInfo {
-	result := make([]ToolCallInfo, len(calls))
-	for i, c := range calls {
-		result[i] = ToolCallInfo{
-			Name:      c.Name,
-			CallID:    c.CallID,
-			Arguments: c.Arguments,
-		}
-	}
-	return result
 }
 
 // convertToToolCalls 将 llm.ToolCallInfo 转换为 tool.ToolCall。
@@ -287,19 +278,4 @@ func convertToToolCalls(calls []llm.ToolCallInfo) []tool.ToolCall {
 		}
 	}
 	return result
-}
-
-// convertToolResults 将 tool.ToolResult 转换为 agent 包的 ToolResultInfo。
-func convertToolResults(results []tool.ToolResult) []ToolResultInfo {
-	infos := make([]ToolResultInfo, len(results))
-	for i, r := range results {
-		infos[i] = ToolResultInfo{
-			CallID:  r.CallID,
-			Name:    r.Name,
-			Success: r.Success,
-			Output:  r.Output,
-			Error:   r.Error,
-		}
-	}
-	return infos
 }

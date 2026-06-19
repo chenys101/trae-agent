@@ -44,11 +44,6 @@ func (s *SequentialThinkingTool) GetParameters() []ToolParameter {
 	}
 }
 
-// GetInputSchema 生成 JSON Schema 参数定义。
-func (s *SequentialThinkingTool) GetInputSchema() map[string]any {
-	return GetInputSchema(s)
-}
-
 // Execute 执行思考步骤。
 func (s *SequentialThinkingTool) Execute(ctx context.Context, args map[string]any) (ToolResult, error) {
 	thought, _ := args["thought"].(string)

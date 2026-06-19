@@ -62,11 +62,6 @@ func (g *GrepSearchTool) GetParameters() []ToolParameter {
 	}
 }
 
-// GetInputSchema 生成 JSON Schema 参数定义。
-func (g *GrepSearchTool) GetInputSchema() map[string]any {
-	return GetInputSchema(g)
-}
-
 // Execute 执行 grep 搜索。
 func (g *GrepSearchTool) Execute(ctx context.Context, args map[string]any) (ToolResult, error) {
 	pattern, _ := args["pattern"].(string)
