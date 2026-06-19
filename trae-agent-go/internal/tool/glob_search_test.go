@@ -112,18 +112,19 @@ func TestGlobSearchMissingPath(t *testing.T) {
 
 func TestGlobSearchNonexistentPath(t *testing.T) {
 	tool := &GlobSearchTool{}
-	result, err := tool.Execute(context.Background(), map[string]any{
+	_, err := tool.Execute(context.Background(), map[string]any{
 		"pattern": "*.txt",
 		"path":    "/nonexistent/path/that/does/not/exist",
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("expected error for nonexistent path")
 	}
-	if result.Success {
-		t.Error("expected failure for nonexistent path")
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected *ToolError, got %T: %v", err, err)
 	}
-	if !strings.Contains(result.Error, "不存在") {
-		t.Errorf("expected error about nonexistent path, got: %s", result.Error)
+	if !strings.Contains(toolErr.Message, "不存在") {
+		t.Errorf("error message should mention nonexistent path, got: %s", toolErr.Message)
 	}
 }
 
@@ -152,17 +153,18 @@ func TestGlobSearchPathIsFile(t *testing.T) {
 	}
 
 	tool := &GlobSearchTool{}
-	result, err := tool.Execute(context.Background(), map[string]any{
+	_, err := tool.Execute(context.Background(), map[string]any{
 		"pattern": "*.txt",
 		"path":    testFile,
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("expected error when path is a file instead of directory")
 	}
-	if result.Success {
-		t.Error("expected failure when path is a file instead of directory")
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected *ToolError, got %T: %v", err, err)
 	}
-	if !strings.Contains(result.Error, "不是目录") {
-		t.Errorf("expected error about not a directory, got: %s", result.Error)
+	if !strings.Contains(toolErr.Message, "不是目录") {
+		t.Errorf("error message should mention not a directory, got: %s", toolErr.Message)
 	}
 }

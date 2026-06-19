@@ -105,7 +105,7 @@ func (g *GrepSearchTool) executeWithRg(ctx context.Context, rgPath, pattern, pat
 		if cmd.ProcessState != nil && cmd.ProcessState.ExitCode() == 1 {
 			return ToolResult{Success: true, Output: "No matches found"}, nil
 		}
-		return ToolResult{Success: false, Error: fmt.Sprintf("rg 执行失败: %v", err)}, nil
+		return ToolResult{}, &ToolError{Tool: "grep_search", Op: "search", Path: path, Message: fmt.Sprintf("rg 执行失败: %v", err)}
 	}
 
 	result := strings.TrimSpace(string(output))
@@ -124,7 +124,7 @@ func (g *GrepSearchTool) executeWithGo(pattern, searchPath, include string, case
 	}
 	re, err := regexp.Compile(patternStr)
 	if err != nil {
-		return ToolResult{Success: false, Error: fmt.Sprintf("正则表达式编译失败: %v", err)}, nil
+		return ToolResult{}, &ToolError{Tool: "grep_search", Op: "search", Path: searchPath, Message: fmt.Sprintf("正则表达式编译失败: %v", err)}
 	}
 
 	var matches []string
@@ -165,7 +165,7 @@ func (g *GrepSearchTool) executeWithGo(pattern, searchPath, include string, case
 	})
 
 	if err != nil {
-		return ToolResult{Success: false, Error: fmt.Sprintf("遍历目录失败: %v", err)}, nil
+		return ToolResult{}, &ToolError{Tool: "grep_search", Op: "search", Path: searchPath, Message: fmt.Sprintf("遍历目录失败: %v", err)}
 	}
 
 	if len(matches) == 0 {

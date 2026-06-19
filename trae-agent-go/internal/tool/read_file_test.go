@@ -94,17 +94,24 @@ func TestReadFileToolWithOffsetAndLimit(t *testing.T) {
 
 func TestReadFileToolFileNotExist(t *testing.T) {
 	tool := &ReadFileTool{}
-	result, err := tool.Execute(context.Background(), map[string]any{
+	_, err := tool.Execute(context.Background(), map[string]any{
 		"file_path": "/nonexistent/path/file.txt",
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("expected error for nonexistent file")
 	}
-	if result.Success {
-		t.Error("expected failure for nonexistent file")
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected *ToolError, got %T: %v", err, err)
 	}
-	if !strings.Contains(result.Error, "文件不存在") {
-		t.Errorf("error should mention file not found, got: %s", result.Error)
+	if toolErr.Tool != "read_file" {
+		t.Errorf("expected tool 'read_file', got '%s'", toolErr.Tool)
+	}
+	if toolErr.Op != "read" {
+		t.Errorf("expected op 'read', got '%s'", toolErr.Op)
+	}
+	if !strings.Contains(toolErr.Message, "文件不存在") {
+		t.Errorf("error message should mention file not found, got: %s", toolErr.Message)
 	}
 }
 
@@ -128,17 +135,18 @@ func TestReadFileToolDirectoryPath(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	tool := &ReadFileTool{}
-	result, err := tool.Execute(context.Background(), map[string]any{
+	_, err := tool.Execute(context.Background(), map[string]any{
 		"file_path": tmpDir,
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("expected error for directory path")
 	}
-	if result.Success {
-		t.Error("expected failure for directory path")
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected *ToolError, got %T: %v", err, err)
 	}
-	if !strings.Contains(result.Error, "目录") {
-		t.Errorf("error should mention directory, got: %s", result.Error)
+	if !strings.Contains(toolErr.Message, "目录") {
+		t.Errorf("error message should mention directory, got: %s", toolErr.Message)
 	}
 }
 

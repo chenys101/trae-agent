@@ -105,15 +105,19 @@ func TestGrepSearchMissingPath(t *testing.T) {
 
 func TestGrepSearchNonexistentPath(t *testing.T) {
 	tool := &GrepSearchTool{}
-	result, err := tool.Execute(context.Background(), map[string]any{
+	_, err := tool.Execute(context.Background(), map[string]any{
 		"pattern": "test",
 		"path":    "/nonexistent/path/that/does/not/exist",
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("expected error for nonexistent path")
 	}
-	if result.Success {
-		t.Error("expected failure for nonexistent path")
+	toolErr, ok := err.(*ToolError)
+	if !ok {
+		t.Fatalf("expected *ToolError, got %T: %v", err, err)
+	}
+	if toolErr.Tool != "grep_search" {
+		t.Errorf("expected tool 'grep_search', got '%s'", toolErr.Tool)
 	}
 }
 

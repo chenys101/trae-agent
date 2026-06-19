@@ -74,20 +74,20 @@ func (r *ReadFileTool) Execute(ctx context.Context, args map[string]any) (ToolRe
 	info, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return ToolResult{Success: false, Error: fmt.Sprintf("文件不存在: %s", filePath)}, nil
+			return ToolResult{}, &ToolError{Tool: "read_file", Op: "read", Path: filePath, Message: "文件不存在"}
 		}
-		return ToolResult{Success: false, Error: fmt.Sprintf("无法访问文件: %v", err)}, nil
+		return ToolResult{}, &ToolError{Tool: "read_file", Op: "read", Path: filePath, Message: fmt.Sprintf("无法访问文件: %v", err)}
 	}
 
 	// 验证路径不能是目录
 	if info.IsDir() {
-		return ToolResult{Success: false, Error: fmt.Sprintf("路径是目录，不是文件: %s", filePath)}, nil
+		return ToolResult{}, &ToolError{Tool: "read_file", Op: "read", Path: filePath, Message: "路径是目录，不是文件"}
 	}
 
 	// 读取文件内容
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return ToolResult{Success: false, Error: fmt.Sprintf("读取文件失败: %v", err)}, nil
+		return ToolResult{}, &ToolError{Tool: "read_file", Op: "read", Path: filePath, Message: fmt.Sprintf("读取文件失败: %v", err)}
 	}
 
 	// 按行分割

@@ -60,7 +60,25 @@ type ToolResult struct {
 	ID      string `json:"id,omitempty"` // OpenAI 特有字段
 }
 
-// ToolExecutor 管理工具的注册和执行。
+// ToolError represents an error from a tool execution.
+type ToolError struct {
+	Tool    string // tool name
+	Op      string // operation that failed (e.g. "read", "write", "search")
+	Path    string // file path involved, if any
+	Message string // human-readable error description
+}
+
+func (e *ToolError) Error() string {
+	if e.Path != "" {
+		return fmt.Sprintf("%s: %s %s: %s", e.Tool, e.Op, e.Path, e.Message)
+	}
+	return fmt.Sprintf("%s: %s: %s", e.Tool, e.Op, e.Message)
+}
+
+// ToolExecutor manages tool registration and execution.
+// ToolExecutor is safe for concurrent use: ExecuteToolCall can be called
+// from multiple goroutines simultaneously. ParallelExecute uses goroutines
+// internally and is also safe.
 type ToolExecutor struct {
 	mu    sync.RWMutex
 	tools map[string]Tool

@@ -80,10 +80,7 @@ func (b *BashTool) Execute(ctx context.Context, args map[string]any) (ToolResult
 	output, err := cmd.CombinedOutput()
 
 	if timeoutCtx.Err() == context.DeadlineExceeded {
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("command timed out after 120 seconds: %s", command),
-		}, nil
+		return ToolResult{}, &ToolError{Tool: "bash", Op: "execute", Message: fmt.Sprintf("command timed out after 120 seconds: %s", command)}
 	}
 
 	if err != nil {

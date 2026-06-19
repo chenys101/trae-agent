@@ -75,6 +75,17 @@ type ModelConfig struct {
 	BaseURL          string  `json:"base_url"`
 }
 
+// APIError represents an error from an LLM API call.
+type APIError struct {
+	Provider   string // "anthropic" or "openai"
+	StatusCode int
+	Message    string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("%s API error (status %d): %s", e.Provider, e.StatusCode, e.Message)
+}
+
 // NewClient 根据 provider 返回对应的 LLM 客户端实例。
 func NewClient(provider string, apiKey string, baseURL string) (LLMClient, error) {
 	switch provider {

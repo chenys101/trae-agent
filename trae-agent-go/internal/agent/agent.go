@@ -23,7 +23,9 @@ type AgentConfig struct {
 	WorkingDir  string
 }
 
-// Agent 是核心执行引擎，管理 LLM 交互和工具调用的循环。
+// Agent drives the execution loop for a coding task.
+// An Agent instance is NOT safe for concurrent use. Each task should create
+// its own Agent, or serialize access externally.
 type Agent struct {
 	client    llm.LLMClient
 	executor  *tool.ToolExecutor

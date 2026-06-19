@@ -70,7 +70,7 @@ func (e *EditTool) Execute(ctx context.Context, args map[string]any) (ToolResult
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return ToolResult{Success: false, Error: fmt.Sprintf("读取文件失败: %v", err)}, nil
+		return ToolResult{}, &ToolError{Tool: "edit", Op: "read", Path: filePath, Message: fmt.Sprintf("读取文件失败: %v", err)}
 	}
 
 	content := string(data)
@@ -80,7 +80,7 @@ func (e *EditTool) Execute(ctx context.Context, args map[string]any) (ToolResult
 
 	newContent := strings.Replace(content, oldString, newString, 1)
 	if err := os.WriteFile(filePath, []byte(newContent), 0); err != nil {
-		return ToolResult{Success: false, Error: fmt.Sprintf("写入文件失败: %v", err)}, nil
+		return ToolResult{}, &ToolError{Tool: "edit", Op: "write", Path: filePath, Message: fmt.Sprintf("写入文件失败: %v", err)}
 	}
 
 	return ToolResult{Success: true, Output: fmt.Sprintf("文件 %s 已更新", filePath)}, nil

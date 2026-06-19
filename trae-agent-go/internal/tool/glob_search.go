@@ -68,12 +68,12 @@ func (g *GlobSearchTool) Execute(ctx context.Context, args map[string]any) (Tool
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return ToolResult{Success: false, Error: fmt.Sprintf("路径不存在: %s", path)}, nil
+			return ToolResult{}, &ToolError{Tool: "glob_search", Op: "find", Path: path, Message: "路径不存在"}
 		}
-		return ToolResult{Success: false, Error: fmt.Sprintf("无法访问路径: %v", err)}, nil
+		return ToolResult{}, &ToolError{Tool: "glob_search", Op: "find", Path: path, Message: fmt.Sprintf("无法访问路径: %v", err)}
 	}
 	if !info.IsDir() {
-		return ToolResult{Success: false, Error: fmt.Sprintf("路径不是目录: %s", path)}, nil
+		return ToolResult{}, &ToolError{Tool: "glob_search", Op: "find", Path: path, Message: "路径不是目录"}
 	}
 
 	var matchedFiles []string
@@ -102,7 +102,7 @@ func (g *GlobSearchTool) Execute(ctx context.Context, args map[string]any) (Tool
 	})
 
 	if err != nil {
-		return ToolResult{Success: false, Error: fmt.Sprintf("遍历目录失败: %v", err)}, nil
+		return ToolResult{}, &ToolError{Tool: "glob_search", Op: "find", Path: path, Message: fmt.Sprintf("遍历目录失败: %v", err)}
 	}
 
 	if len(matchedFiles) == 0 {
