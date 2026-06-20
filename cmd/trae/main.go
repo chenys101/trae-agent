@@ -1,7 +1,16 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+
+	"github.com/bytedance/trae-agent/internal/cli"
+)
 
 func main() {
-	fmt.Println("trae")
+	root := cli.NewRootCmd()
+	if err := root.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
