@@ -12,8 +12,12 @@ func TestShowConfigCommand_output(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 	userCfg := filepath.Join(tmp, ".trae", "config.yaml")
-	os.MkdirAll(filepath.Dir(userCfg), 0o755)
-	os.WriteFile(userCfg, []byte("default_provider: anthropic\nlog_level: debug\n"), 0o644)
+	if err := os.MkdirAll(filepath.Dir(userCfg), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(userCfg, []byte("default_provider: anthropic\nlog_level: debug\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	var buf bytes.Buffer
 	cmd := NewShowConfigCmd()

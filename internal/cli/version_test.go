@@ -7,6 +7,12 @@ import (
 )
 
 func TestVersionCommand_output(t *testing.T) {
+	// 保存并恢复包级变量，避免测试间污染
+	prevVersion, prevCommit := Version, Commit
+	t.Cleanup(func() {
+		Version, Commit = prevVersion, prevCommit
+	})
+
 	Version = "0.1.0"
 	Commit = "abc1234"
 	var buf bytes.Buffer

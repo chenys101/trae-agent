@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,10 @@ import (
 func TestInit_writesToFile(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
+
+	// 保存并恢复全局 slog.Default，避免测试间污染
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	l, err := Init("debug")
 	if err != nil {

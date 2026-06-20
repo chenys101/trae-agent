@@ -24,7 +24,11 @@ func Load(opts LoadOptions) (Config, error) {
 	}
 
 	// 1. 用户级 ~/.trae/config.yaml
-	if userCfg, err := loadYaml(userConfigPath()); err == nil {
+	userPath, err := userConfigPath()
+	if err != nil {
+		return cfg, fmt.Errorf("resolve user config path: %w", err)
+	}
+	if userCfg, err := loadYaml(userPath); err == nil {
 		merge(&cfg, userCfg)
 	} else if !os.IsNotExist(err) {
 		return cfg, fmt.Errorf("load user config: %w", err)
@@ -59,9 +63,12 @@ func Load(opts LoadOptions) (Config, error) {
 	return cfg, nil
 }
 
-func userConfigPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".trae", "config.yaml")
+func userConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("get home dir: %w", err)
+	}
+	return filepath.Join(home, ".trae", "config.yaml"), nil
 }
 
 func loadYaml(path string) (Config, error) {

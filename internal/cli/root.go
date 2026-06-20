@@ -11,8 +11,10 @@ var (
 
 func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "trae",
-		Short: "Trae Agent — CLI coding agent",
+		Use:           "trae",
+		Short:         "Trae Agent — CLI coding agent",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 	root.AddCommand(NewVersionCmd())
 	root.AddCommand(NewShowConfigCmd())
