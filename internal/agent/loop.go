@@ -15,12 +15,17 @@ type Agent struct {
 	dispatcher *tool.Dispatcher
 	tools      []llm.ToolDef
 	maxSteps   int
+	model      string
 }
 
 type Option func(*Agent)
 
 func WithMaxSteps(n int) Option {
 	return func(a *Agent) { a.maxSteps = n }
+}
+
+func WithModel(m string) Option {
+	return func(a *Agent) { a.model = m }
 }
 
 func New(provider llm.Provider, registry *tool.Registry, opts ...Option) *Agent {
@@ -72,7 +77,7 @@ func (a *Agent) Run(ctx context.Context, userInput string, events chan<- Event) 
 
 	for step := 0; step < a.maxSteps; step++ {
 		req := llm.Request{
-			Model:    "",
+			Model:    a.model,
 			System:   SystemPrompt,
 			Messages: messages,
 			Tools:    a.tools,
@@ -150,10 +155,6 @@ func (a *Agent) Run(ctx context.Context, userInput string, events chan<- Event) 
 		}
 	}
 
-	select {
-	case events <- DoneEvent{Usage: llm.Usage{}}:
-	case <-ctx.Done():
-	}
 	return fmt.Errorf("max steps (%d) exceeded", a.maxSteps)
 }
 

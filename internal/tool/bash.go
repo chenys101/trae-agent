@@ -67,8 +67,8 @@ func (b *Bash) Run(ctx context.Context, args json.RawMessage) Result {
 	err := cmd.Run()
 	output := buf.String()
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return ErrorResult("timeout after %s\n%s", timeout, output)
+		if ctx.Err() != nil {
+			return ErrorResult("cancelled: %v\n%s", ctx.Err(), output)
 		}
 		return ErrorResult("exit: %v\n%s", err, output)
 	}

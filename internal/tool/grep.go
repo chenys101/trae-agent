@@ -53,14 +53,16 @@ func (Grep) Run(ctx context.Context, args json.RawMessage) Result {
 
 	var b strings.Builder
 	filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+		if err != nil {
+			return nil // 跳过无法访问的路径（权限等）
+		}
+		if info.IsDir() {
 			return nil
 		}
 		f, err := os.Open(p)
 		if err != nil {
 			return nil
 		}
-		defer f.Close()
 		scanner := bufio.NewScanner(f)
 		lineNum := 0
 		for scanner.Scan() {
@@ -69,6 +71,7 @@ func (Grep) Run(ctx context.Context, args json.RawMessage) Result {
 				fmt.Fprintf(&b, "%s:%d:%s\n", p, lineNum, scanner.Text())
 			}
 		}
+		f.Close()
 		return nil
 	})
 	return Result{Content: b.String()}

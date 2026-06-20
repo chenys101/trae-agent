@@ -46,6 +46,9 @@ func (Read) Run(ctx context.Context, args json.RawMessage) Result {
 	if err != nil {
 		return ErrorResult("read file: %v", err)
 	}
+	if len(data) == 0 {
+		return Result{Content: ""}
+	}
 
 	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
 	start := 1
@@ -62,10 +65,13 @@ func (Read) Run(ctx context.Context, args json.RawMessage) Result {
 	if start < 1 {
 		start = 1
 	}
+	if end > len(lines) {
+		end = len(lines)
+	}
 
 	maxWidth := len(fmt.Sprintf("%d", end))
 	var b strings.Builder
-	for i := start - 1; i < end && i < len(lines); i++ {
+	for i := start - 1; i < end; i++ {
 		fmt.Fprintf(&b, "%*d→%s\n", maxWidth, i+1, lines[i])
 	}
 	return Result{Content: b.String()}

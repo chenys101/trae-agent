@@ -46,7 +46,10 @@ func (Glob) Run(ctx context.Context, args json.RawMessage) Result {
 
 	var matches []string
 	filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+		if err != nil {
+			return nil // 跳过无法访问的路径（权限等）
+		}
+		if info.IsDir() {
 			return nil
 		}
 		rel, _ := filepath.Rel(root, p)

@@ -53,10 +53,10 @@ func (Edit) Run(ctx context.Context, args json.RawMessage) Result {
 	content := string(data)
 
 	if a.ReplaceAll {
-		newContent := strings.ReplaceAll(content, a.OldString, a.NewString)
-		if newContent == content {
+		if !strings.Contains(content, a.OldString) {
 			return ErrorResult("old_string not found")
 		}
+		newContent := strings.ReplaceAll(content, a.OldString, a.NewString)
 		if err := os.WriteFile(a.FilePath, []byte(newContent), 0o644); err != nil {
 			return ErrorResult("write file: %v", err)
 		}

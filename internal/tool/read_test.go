@@ -64,3 +64,35 @@ func TestRead_missingArg(t *testing.T) {
 		t.Error("expected error for missing file_path")
 	}
 }
+
+func TestRead_emptyFile(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "empty.txt")
+	os.WriteFile(path, []byte{}, 0o644)
+
+	r := NewRead()
+	args, _ := json.Marshal(map[string]string{"file_path": path})
+	res := r.Run(context.Background(), args)
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", res.Content)
+	}
+	if res.Content != "" {
+		t.Errorf("empty file should return empty content, got: %q", res.Content)
+	}
+}
+
+func TestRead_offsetBeyondFile(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "f.txt")
+	os.WriteFile(path, []byte("a\nb\n"), 0o644)
+
+	r := NewRead()
+	args, _ := json.Marshal(map[string]any{"file_path": path, "offset": 100})
+	res := r.Run(context.Background(), args)
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", res.Content)
+	}
+	if res.Content != "" {
+		t.Errorf("offset beyond file should return empty, got: %q", res.Content)
+	}
+}

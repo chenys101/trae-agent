@@ -59,10 +59,10 @@ func NewRunCmd() *cobra.Command {
 			)
 
 			maxSteps := cfg.MaxSteps
-			if maxSteps == 0 {
-				maxSteps = 20
-			}
-			a := agent.New(llmProvider, registry, agent.WithMaxSteps(maxSteps))
+		if maxSteps == 0 {
+			maxSteps = 20
+		}
+		a := agent.New(llmProvider, registry, agent.WithMaxSteps(maxSteps), agent.WithModel(modelFlag))
 
 			events := make(chan agent.Event, 64)
 			errCh := make(chan error, 1)
