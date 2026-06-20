@@ -35,6 +35,14 @@ func NewRootCmd() *cobra.Command {
 			}
 			return nil
 		},
+		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+			if v := cmd.Context().Value(loggerCloserKey{}); v != nil {
+				if closer, ok := v.(interface{ Close() error }); ok {
+					_ = closer.Close()
+				}
+			}
+			return nil
+		},
 	}
 	root.AddCommand(NewVersionCmd())
 	root.AddCommand(NewShowConfigCmd())

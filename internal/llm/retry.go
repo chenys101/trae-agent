@@ -3,7 +3,6 @@ package llm
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 )
@@ -32,7 +31,7 @@ func (r *RetryableProvider) Stream(ctx context.Context, req Request) (<-chan Str
 	var lastErr error
 	for attempt := 0; attempt < r.maxRetries; attempt++ {
 		if attempt > 0 {
-			delay := time.Duration(math.Pow(2, float64(attempt-1))) * r.baseDelay
+			delay := time.Duration(1<<(attempt-1)) * r.baseDelay
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -49,7 +48,7 @@ func (r *RetryableProvider) Stream(ctx context.Context, req Request) (<-chan Str
 			return nil, err
 		}
 	}
-	return nil, fmt.Errorf("after %d retries: %w", r.maxRetries, lastErr)
+	return nil, fmt.Errorf("after %d attempts: %w", r.maxRetries, lastErr)
 }
 
 // isRetryable 判断错误是否可重试：5xx、429、网络错误。

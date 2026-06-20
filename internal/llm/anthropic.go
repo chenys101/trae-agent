@@ -98,7 +98,10 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			ch <- Error{Err: ctx.Err()}
+			select {
+			case ch <- Error{Err: ctx.Err()}:
+			default:
+			}
 			return
 		default:
 		}
@@ -176,7 +179,7 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 		}
 	}
 
-	if err := scanner.Err(); err != nil && err != io.EOF {
+	if err := scanner.Err(); err != nil {
 		select {
 		case ch <- Error{Err: fmt.Errorf("read sse: %w", err)}:
 		case <-ctx.Done():
