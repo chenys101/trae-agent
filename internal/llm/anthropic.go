@@ -27,17 +27,41 @@ func NewAnthropic(apiKey, baseURL, defaultModel string) *Anthropic {
 func (a *Anthropic) Name() string { return "anthropic" }
 
 type anthropicRequest struct {
-	Model       string         `json:"model"`
-	MaxTokens   int            `json:"max_tokens"`
-	Messages    []anthropicMsg `json:"messages"`
-	System      string         `json:"system,omitempty"`
-	Temperature float64        `json:"temperature,omitempty"`
-	Stream      bool           `json:"stream"`
+	Model       string          `json:"model"`
+	MaxTokens   int             `json:"max_tokens"`
+	Messages    []anthropicMsg  `json:"messages"`
+	System      string          `json:"system,omitempty"`
+	Temperature float64         `json:"temperature,omitempty"`
+	Stream      bool            `json:"stream"`
+	Tools       []anthropicTool `json:"tools,omitempty"`
+}
+
+type anthropicTool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	InputSchema json.RawMessage `json:"input_schema"`
+}
+
+type anthropicContentBlock struct {
+	Type      string          `json:"type"`
+	Text      string          `json:"text,omitempty"`
+	ID        string          `json:"id,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
+	ToolUseID string          `json:"tool_use_id,omitempty"`
+	Content   any             `json:"content,omitempty"`
 }
 
 type anthropicMsg struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string                  `json:"role"`
+	Content []anthropicContentBlock `json:"content"`
+}
+
+// toolCallAccum 累积流式 tool_call 增量（包级共享，openai.go 也用）。
+type toolCallAccum struct {
+	ID   string
+	Name string
+	Args strings.Builder
 }
 
 func (a *Anthropic) Stream(ctx context.Context, req Request) (<-chan StreamEvent, error) {
@@ -50,6 +74,15 @@ func (a *Anthropic) Stream(ctx context.Context, req Request) (<-chan StreamEvent
 		maxTokens = 4096
 	}
 
+	var tools []anthropicTool
+	for _, t := range req.Tools {
+		tools = append(tools, anthropicTool{
+			Name:        t.Name,
+			Description: t.Description,
+			InputSchema: t.Schema,
+		})
+	}
+
 	body, err := json.Marshal(anthropicRequest{
 		Model:       model,
 		MaxTokens:   maxTokens,
@@ -57,6 +90,7 @@ func (a *Anthropic) Stream(ctx context.Context, req Request) (<-chan StreamEvent
 		System:      req.System,
 		Temperature: req.Temperature,
 		Stream:      true,
+		Tools:       tools,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
@@ -94,6 +128,7 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	var inputTokens, outputTokens int
 	var stopReason string
+	toolAccums := map[int]*toolCallAccum{}
 
 	for scanner.Scan() {
 		select {
@@ -116,9 +151,11 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 		}
 
 		var evt struct {
-			Type  string          `json:"type"`
-			Delta json.RawMessage `json:"delta"`
-			Usage struct {
+			Type         string          `json:"type"`
+			Index        int             `json:"index"`
+			Delta        json.RawMessage `json:"delta"`
+			ContentBlock json.RawMessage `json:"content_block"`
+			Usage        struct {
 				InputTokens  int `json:"input_tokens"`
 				OutputTokens int `json:"output_tokens"`
 			} `json:"usage"`
@@ -135,16 +172,38 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 		switch evt.Type {
 		case "message_start":
 			inputTokens = evt.Message.Usage.InputTokens
+		case "content_block_start":
+			var blk struct {
+				Index int `json:"index"`
+				ContentBlock struct {
+					Type string `json:"type"`
+					ID   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"content_block"`
+			}
+			json.Unmarshal([]byte(data), &blk)
+			if blk.ContentBlock.Type == "tool_use" {
+				toolAccums[blk.Index] = &toolCallAccum{
+					ID:   blk.ContentBlock.ID,
+					Name: blk.ContentBlock.Name,
+				}
+			}
 		case "content_block_delta":
 			var d struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
+				Type        string `json:"type"`
+				Text        string `json:"text"`
+				PartialJSON string `json:"partial_json"`
 			}
-			if err := json.Unmarshal(evt.Delta, &d); err == nil && d.Type == "text_delta" {
+			json.Unmarshal(evt.Delta, &d)
+			if d.Type == "text_delta" {
 				select {
 				case ch <- TextDelta{Content: d.Text}:
 				case <-ctx.Done():
 					return
+				}
+			} else if d.Type == "input_json_delta" {
+				if acc, ok := toolAccums[evt.Index]; ok {
+					acc.Args.WriteString(d.PartialJSON)
 				}
 			}
 		case "message_delta":
@@ -159,6 +218,15 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 				stopReason = d.StopReason
 			}
 		case "message_stop":
+			for i := 0; i < len(toolAccums); i++ {
+				if acc, ok := toolAccums[i]; ok {
+					select {
+					case ch <- ToolCallDelta{ID: acc.ID, Name: acc.Name, ArgsDelta: acc.Args.String()}:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}
 			select {
 			case ch <- Done{Usage: Usage{InputTokens: inputTokens, OutputTokens: outputTokens}, StopReason: stopReason}:
 			case <-ctx.Done():
@@ -190,7 +258,31 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 func toAnthropicMsgs(msgs []Message) []anthropicMsg {
 	out := make([]anthropicMsg, len(msgs))
 	for i, m := range msgs {
-		out[i] = anthropicMsg{Role: string(m.Role), Content: m.Content}
+		var blocks []anthropicContentBlock
+		role := string(m.Role)
+		if m.ToolCallID != "" {
+			role = "user"
+			blocks = []anthropicContentBlock{{
+				Type:      "tool_result",
+				ToolUseID: m.ToolCallID,
+				Content:   m.Content,
+			}}
+		} else if len(m.ToolCalls) > 0 {
+			if m.Content != "" {
+				blocks = append(blocks, anthropicContentBlock{Type: "text", Text: m.Content})
+			}
+			for _, tc := range m.ToolCalls {
+				blocks = append(blocks, anthropicContentBlock{
+					Type:  "tool_use",
+					ID:    tc.ID,
+					Name:  tc.Name,
+					Input: json.RawMessage(tc.Args),
+				})
+			}
+		} else {
+			blocks = []anthropicContentBlock{{Type: "text", Text: m.Content}}
+		}
+		out[i] = anthropicMsg{Role: role, Content: blocks}
 	}
 	return out
 }

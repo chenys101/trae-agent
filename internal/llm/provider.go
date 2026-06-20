@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 )
 
@@ -12,12 +13,15 @@ const (
 	RoleSystem    Role = "system"
 	RoleUser      Role = "user"
 	RoleAssistant Role = "assistant"
+	RoleTool      Role = "tool"
 )
 
 // Message 单条消息。M1 只用 Content 文本，ToolCalls 留 M2。
 type Message struct {
-	Role    Role   `json:"role"`
-	Content string `json:"content"`
+	Role       Role       `json:"role"`
+	Content    string     `json:"content"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
 }
 
 // Request LLM 请求。
@@ -27,6 +31,21 @@ type Request struct {
 	System      string
 	MaxTokens   int
 	Temperature float64
+	Tools       []ToolDef
+}
+
+// ToolCall 非流式工具调用。
+type ToolCall struct {
+	ID   string
+	Name string
+	Args string
+}
+
+// ToolDef 工具定义。
+type ToolDef struct {
+	Name        string
+	Description string
+	Schema      json.RawMessage
 }
 
 // Usage token 用量统计。
@@ -44,6 +63,15 @@ type TextDelta struct {
 }
 
 func (TextDelta) isStreamEvent() {}
+
+// ToolCallDelta 工具调用增量。
+type ToolCallDelta struct {
+	ID        string
+	Name      string
+	ArgsDelta string
+}
+
+func (ToolCallDelta) isStreamEvent() {}
 
 // Done 流结束。
 type Done struct {

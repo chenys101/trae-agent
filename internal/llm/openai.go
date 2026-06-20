@@ -33,11 +33,34 @@ type openaiRequest struct {
 	Temperature   float64            `json:"temperature,omitempty"`
 	Stream        bool               `json:"stream"`
 	StreamOptions *openaiStreamOpts  `json:"stream_options,omitempty"`
+	Tools         []openaiTool       `json:"tools,omitempty"`
+}
+
+type openaiTool struct {
+	Type     string         `json:"type"`
+	Function openaiToolFunc `json:"function"`
+}
+
+type openaiToolFunc struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters"`
 }
 
 type openaiMsg struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string           `json:"role"`
+	Content    string           `json:"content"`
+	ToolCalls  []openaiToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string           `json:"tool_call_id,omitempty"`
+}
+
+type openaiToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
 }
 
 type openaiStreamOpts struct {
@@ -55,7 +78,30 @@ func (o *OpenAI) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 		msgs = append(msgs, openaiMsg{Role: "system", Content: req.System})
 	}
 	for _, m := range req.Messages {
-		msgs = append(msgs, openaiMsg{Role: string(m.Role), Content: m.Content})
+		om := openaiMsg{
+			Role:       string(m.Role),
+			Content:    m.Content,
+			ToolCallID: m.ToolCallID,
+		}
+		for _, tc := range m.ToolCalls {
+			oc := openaiToolCall{ID: tc.ID, Type: "function"}
+			oc.Function.Name = tc.Name
+			oc.Function.Arguments = tc.Args
+			om.ToolCalls = append(om.ToolCalls, oc)
+		}
+		msgs = append(msgs, om)
+	}
+
+	var tools []openaiTool
+	for _, t := range req.Tools {
+		tools = append(tools, openaiTool{
+			Type: "function",
+			Function: openaiToolFunc{
+				Name:        t.Name,
+				Description: t.Description,
+				Parameters:  t.Schema,
+			},
+		})
 	}
 
 	bodyReq := openaiRequest{
@@ -64,6 +110,7 @@ func (o *OpenAI) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 		Temperature:   req.Temperature,
 		Stream:        true,
 		StreamOptions: &openaiStreamOpts{IncludeUsage: true},
+		Tools:         tools,
 	}
 	if req.MaxTokens > 0 {
 		bodyReq.MaxTokens = req.MaxTokens
@@ -105,6 +152,19 @@ func (o *OpenAI) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- Stre
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	var inputTokens, outputTokens int
 	var stopReason string
+	toolAccums := map[int]*toolCallAccum{}
+
+	flushToolCalls := func() {
+		for i := 0; i < len(toolAccums); i++ {
+			if acc, ok := toolAccums[i]; ok {
+				select {
+				case ch <- ToolCallDelta{ID: acc.ID, Name: acc.Name, ArgsDelta: acc.Args.String()}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}
 
 	for scanner.Scan() {
 		select {
@@ -126,6 +186,7 @@ func (o *OpenAI) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- Stre
 			continue
 		}
 		if data == "[DONE]" {
+			flushToolCalls()
 			select {
 			case ch <- Done{Usage: Usage{InputTokens: inputTokens, OutputTokens: outputTokens}, StopReason: stopReason}:
 			case <-ctx.Done():
@@ -136,7 +197,15 @@ func (o *OpenAI) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- Stre
 		var evt struct {
 			Choices []struct {
 				Delta struct {
-					Content string `json:"content"`
+					Content   string `json:"content"`
+					ToolCalls []struct {
+						Index    int    `json:"index"`
+						ID       string `json:"id"`
+						Function struct {
+							Name      string `json:"name"`
+							Arguments string `json:"arguments"`
+						} `json:"function"`
+					} `json:"tool_calls"`
 				} `json:"delta"`
 				FinishReason string `json:"finish_reason"`
 			} `json:"choices"`
@@ -162,6 +231,22 @@ func (o *OpenAI) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- Stre
 					return
 				}
 			}
+			for _, tc := range choice.Delta.ToolCalls {
+				acc, ok := toolAccums[tc.Index]
+				if !ok {
+					acc = &toolCallAccum{}
+					toolAccums[tc.Index] = acc
+				}
+				if tc.ID != "" {
+					acc.ID = tc.ID
+				}
+				if tc.Function.Name != "" {
+					acc.Name = tc.Function.Name
+				}
+				if tc.Function.Arguments != "" {
+					acc.Args.WriteString(tc.Function.Arguments)
+				}
+			}
 			if choice.FinishReason != "" {
 				stopReason = choice.FinishReason
 			}
@@ -177,6 +262,7 @@ func (o *OpenAI) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- Stre
 	}
 
 	// 流结束但没收到 [DONE]，也发 Done（幂等保护）
+	flushToolCalls()
 	select {
 	case ch <- Done{Usage: Usage{InputTokens: inputTokens, OutputTokens: outputTokens}, StopReason: stopReason}:
 	case <-ctx.Done():

@@ -105,3 +105,57 @@ func TestOpenAI_Stream_systemPrompt(t *testing.T) {
 		t.Errorf("request body missing system content: %s", gotBody)
 	}
 }
+
+func TestOpenAI_Stream_toolCall(t *testing.T) {
+	sseBody := strings.Join([]string{
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"read","arguments":""}}]}}]}`,
+		``,
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"file_path\":\"/tmp/a\"}"}}]}}]}`,
+		``,
+		`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		``,
+		`data: {"usage":{"prompt_tokens":5,"completion_tokens":10}}`,
+		``,
+		`data: [DONE]`,
+		``,
+		``,
+	}, "\n")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		w.Write([]byte(sseBody))
+	}))
+	defer srv.Close()
+
+	o := NewOpenAI("k", srv.URL, "m")
+	ch, err := o.Stream(context.Background(), Request{
+		Model:    "m",
+		Messages: []Message{{Role: RoleUser, Content: "read /tmp/a"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var toolCalls []ToolCall
+	for e := range ch {
+		if tc, ok := e.(ToolCallDelta); ok {
+			toolCalls = append(toolCalls, ToolCall{
+				ID:   tc.ID,
+				Name: tc.Name,
+				Args: tc.ArgsDelta,
+			})
+		}
+	}
+	if len(toolCalls) != 1 {
+		t.Fatalf("got %d tool calls, want 1", len(toolCalls))
+	}
+	if toolCalls[0].Name != "read" {
+		t.Errorf("name = %q, want read", toolCalls[0].Name)
+	}
+	if toolCalls[0].ID != "call_1" {
+		t.Errorf("id = %q, want call_1", toolCalls[0].ID)
+	}
+	if !strings.Contains(toolCalls[0].Args, "/tmp/a") {
+		t.Errorf("args = %q, want /tmp/a", toolCalls[0].Args)
+	}
+}
