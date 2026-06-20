@@ -5,9 +5,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/bytedance/trae-agent/internal/agent"
 	"github.com/bytedance/trae-agent/internal/config"
-	"github.com/bytedance/trae-agent/internal/headless"
 	"github.com/bytedance/trae-agent/internal/llm"
+	"github.com/bytedance/trae-agent/internal/tool"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +17,7 @@ func NewRunCmd() *cobra.Command {
 	var modelFlag string
 	cmd := &cobra.Command{
 		Use:   "run [prompt]",
-		Short: "Run a single-turn prompt and stream the response",
+		Short: "Run a prompt through the agent loop with tool access",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load(config.LoadOptions{})
@@ -41,29 +42,39 @@ func NewRunCmd() *cobra.Command {
 			if providerType == "" {
 				providerType = providerName
 			}
-			provider, err := llm.NewProvider(providerType, provCfg.APIKey, provCfg.BaseURL, provCfg.DefaultModel)
+			llmProvider, err := llm.NewProvider(providerType, provCfg.APIKey, provCfg.BaseURL, provCfg.DefaultModel)
 			if err != nil {
 				return err
 			}
-			provider = llm.NewRetryable(provider, 3, 500*time.Millisecond)
+			llmProvider = llm.NewRetryable(llmProvider, 3, 500*time.Millisecond)
 
-			model := modelFlag
-			if model == "" {
-				model = provCfg.DefaultModel
-			}
+			// 构造工具
+			registry := tool.NewRegistry(
+				tool.NewRead(),
+				tool.NewWrite(),
+				tool.NewEdit(),
+				tool.NewGlob(),
+				tool.NewGrep(),
+				tool.NewBash(120*time.Second),
+			)
 
-			req := llm.Request{
-				Model:    model,
-				System:   cfg.SystemPrompt,
-				Messages: []llm.Message{{Role: llm.RoleUser, Content: args[0]}},
+			maxSteps := cfg.MaxSteps
+			if maxSteps == 0 {
+				maxSteps = 20
 			}
-			if provCfg.MaxTokens > 0 {
-				req.MaxTokens = provCfg.MaxTokens
-			}
-			req.Temperature = provCfg.Temperature
+			a := agent.New(llmProvider, registry, agent.WithMaxSteps(maxSteps))
 
-			usage, err := headless.Run(cmd.Context(), provider, req, cmd.OutOrStdout())
-			if err != nil {
+			events := make(chan agent.Event, 64)
+			errCh := make(chan error, 1)
+			go func() {
+				errCh <- a.Run(cmd.Context(), args[0], events)
+			}()
+
+			usage, renderErr := agent.RenderEvents(cmd.Context(), events, cmd.OutOrStdout())
+			if renderErr != nil {
+				return renderErr
+			}
+			if err := <-errCh; err != nil {
 				return err
 			}
 			fmt.Fprintf(os.Stderr, "\n[tokens: in=%d out=%d]\n", usage.InputTokens, usage.OutputTokens)

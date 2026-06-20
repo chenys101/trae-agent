@@ -6,6 +6,7 @@ type Config struct {
 	Providers       map[string]ProviderConfig `yaml:"model_providers"`
 	LogLevel        string                    `yaml:"log_level"`
 	SystemPrompt    string                    `yaml:"system_prompt"`
+	MaxSteps        int                       `yaml:"max_steps"`
 }
 
 // ProviderConfig 单个 LLM provider 配置。
