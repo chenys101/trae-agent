@@ -15,5 +15,6 @@ func NewRootCmd() *cobra.Command {
 		Short: "Trae Agent — CLI coding agent",
 	}
 	root.AddCommand(NewVersionCmd())
+	root.AddCommand(NewShowConfigCmd())
 	return root
 }
