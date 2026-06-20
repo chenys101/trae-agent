@@ -67,19 +67,24 @@ func (ToolCallEvent) isAgentEvent()   {}
 func (ToolResultEvent) isAgentEvent() {}
 func (DoneEvent) isAgentEvent()       {}
 
-// Run 执行 agent 循环，处理用户输入，通过 events channel 推送事件。
+// Run 执行 agent 循环（单轮，无历史保留）。
 func (a *Agent) Run(ctx context.Context, userInput string, events chan<- Event) error {
-	defer close(events)
-
 	messages := []llm.Message{
 		{Role: llm.RoleUser, Content: userInput},
 	}
+	return a.RunWithHistory(ctx, &messages, events)
+}
+
+// RunWithHistory 用已有消息历史执行 agent 循环。
+// messages 是指针，agent 会追加 assistant 和 tool 消息。
+func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, events chan<- Event) error {
+	defer close(events)
 
 	for step := 0; step < a.maxSteps; step++ {
 		req := llm.Request{
 			Model:    a.model,
 			System:   SystemPrompt,
-			Messages: messages,
+			Messages: *messages,
 			Tools:    a.tools,
 		}
 
@@ -122,7 +127,7 @@ func (a *Agent) Run(ctx context.Context, userInput string, events chan<- Event) 
 
 		// assistant 消息回灌
 		assistantMsg := llm.Message{Role: llm.RoleAssistant, Content: textBuf, ToolCalls: toolCalls}
-		messages = append(messages, assistantMsg)
+		*messages = append(*messages, assistantMsg)
 
 		// 没有工具调用，循环结束
 		if len(toolCalls) == 0 {
@@ -147,7 +152,7 @@ func (a *Agent) Run(ctx context.Context, userInput string, events chan<- Event) 
 			}
 			// 工具结果回灌：用 ToolCallID 关联，provider 层负责序列化为
 			// anthropic tool_result block 或 openai role=tool 消息
-			messages = append(messages, llm.Message{
+			*messages = append(*messages, llm.Message{
 				Role:       llm.RoleTool,
 				Content:    r.Result.Content,
 				ToolCallID: toolCalls[i].ID,
