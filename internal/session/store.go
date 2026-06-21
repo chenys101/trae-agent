@@ -13,9 +13,13 @@ import (
 	"github.com/bytedance/trae-agent/internal/llm"
 )
 
+// CurrentVersion 当前会话 schema 版本。新增字段或改变结构时递增。
+const CurrentVersion = 1
+
 // Session 一次对话会话。
 type Session struct {
 	ID        string        `json:"id"`
+	Version   int           `json:"version"`
 	CreatedAt time.Time     `json:"created_at"`
 	UpdatedAt time.Time     `json:"updated_at"`
 	Messages  []llm.Message `json:"messages"`
@@ -57,6 +61,10 @@ func (s *Store) Save(sess *Session) error {
 		sess.CreatedAt = time.Now()
 	}
 	sess.UpdatedAt = time.Now()
+	// 旧会话（Version==0）保存时升级到当前版本；新会话也据此标记版本。
+	if sess.Version == 0 {
+		sess.Version = CurrentVersion
+	}
 	data, err := json.MarshalIndent(sess, "", "  ")
 	if err != nil {
 		return err
@@ -112,18 +120,26 @@ func (s *Store) List() ([]*Session, error) {
 	}
 	var sessions []*Session
 	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+		name := entry.Name()
+		if entry.IsDir() || filepath.Ext(name) != ".json" {
 			continue
 		}
-		id := entry.Name()[:len(entry.Name())-len(".json")]
+		id := name[:len(name)-len(".json")]
+		if id == "" {
+			continue // 跳过 .json（空 id）这类异常文件名
+		}
 		sess, err := s.Load(id)
 		if err != nil {
 			continue // 跳过损坏的会话文件
 		}
 		sessions = append(sessions, sess)
 	}
-	sort.Slice(sessions, func(i, j int) bool {
-		return sessions[i].UpdatedAt.After(sessions[j].UpdatedAt)
+	// 稳定排序：主键 UpdatedAt 降序，次级键 CreatedAt 降序，避免同 UpdatedAt 时顺序抖动。
+	sort.SliceStable(sessions, func(i, j int) bool {
+		if !sessions[i].UpdatedAt.Equal(sessions[j].UpdatedAt) {
+			return sessions[i].UpdatedAt.After(sessions[j].UpdatedAt)
+		}
+		return sessions[i].CreatedAt.After(sessions[j].CreatedAt)
 	})
 	return sessions, nil
 }

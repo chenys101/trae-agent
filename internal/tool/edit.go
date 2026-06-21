@@ -20,7 +20,7 @@ func (Edit) Schema() json.RawMessage {
   "properties": {
     "file_path": {"type": "string"},
     "old_string": {"type": "string", "description": "must be unique unless replace_all"},
-    "new_string": {"type": "string"},
+    "new_string": {"type": "string", "description": "replacement text; can be empty to delete old_string"},
     "replace_all": {"type": "boolean", "description": "replace all occurrences"}
   },
   "required": ["file_path", "old_string", "new_string"]

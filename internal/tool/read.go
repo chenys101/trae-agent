@@ -69,15 +69,15 @@ func (Read) Run(ctx context.Context, args json.RawMessage) Result {
 	if a.Offset > 0 {
 		start = a.Offset
 	}
-	end := len(lines)
-	if a.Limit > 0 && start-1+a.Limit < end {
-		end = start - 1 + a.Limit
+	if start < 1 {
+		start = 1
 	}
 	if start > len(lines) {
 		return Result{Content: ""}
 	}
-	if start < 1 {
-		start = 1
+	end := len(lines)
+	if a.Limit > 0 && start-1+a.Limit < end {
+		end = start - 1 + a.Limit
 	}
 	if end > len(lines) {
 		end = len(lines)

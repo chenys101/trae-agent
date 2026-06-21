@@ -36,6 +36,8 @@ func NewContextManager(opts ...ContextOption) *ContextManager {
 // EstimateTokens 粗略估算 messages 的 token 数。
 // 用 utf8.RuneCountInString 计字符数：中文约 1 token/字、英文约 0.25 token/字，
 // 混合估算取平均每字符 ~0.5 token（rune 数 / 2）。
+// 注意：这是包级函数而非 ContextManager 方法，repl.go 直接调用以展示压缩前后 token 数。
+// 该估算偏保守，未来可替换为真实 tokenizer（如 tiktoken）以提升精度。
 func EstimateTokens(messages []llm.Message) int {
 	total := 0
 	for _, m := range messages {
@@ -53,8 +55,9 @@ func EstimateTokens(messages []llm.Message) int {
 }
 
 // ShouldCompact 检查是否需要压缩。
+// 用 >= 而非 >：达到阈值即触发，边界行为更直观。
 func (c *ContextManager) ShouldCompact(messages []llm.Message) bool {
-	return EstimateTokens(messages) > c.maxTokens
+	return EstimateTokens(messages) >= c.maxTokens
 }
 
 // MaxTokens 返回阈值。

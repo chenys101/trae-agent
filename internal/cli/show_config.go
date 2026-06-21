@@ -1,9 +1,6 @@
 package cli
 
 import (
-	"fmt"
-
-	"github.com/bytedance/trae-agent/internal/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -13,7 +10,7 @@ func NewShowConfigCmd() *cobra.Command {
 		Use:   "show-config",
 		Short: "Print merged configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(config.LoadOptions{})
+			cfg, err := configFromCmd(cmd)
 			if err != nil {
 				return err
 			}
@@ -22,8 +19,9 @@ func NewShowConfigCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprint(cmd.OutOrStdout(), string(data))
-			return nil
+			// 直接写字节，避免不必要的 string 转换
+			_, err = cmd.OutOrStdout().Write(data)
+			return err
 		},
 	}
 }

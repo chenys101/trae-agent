@@ -12,7 +12,24 @@ linters:
     - unused
     - misspell
     - revive
+    - gosec
+    - gofmt
+    - goimports
+    - exhaustive
 
 linters-settings:
   errcheck:
     check-type-assertions: true
+  revive:
+    rules:
+      # 导出符号需有文档注释
+      - name: exported
+
+issues:
+  exclude-rules:
+    # 测试文件放宽：常硬编码密钥/忽略错误/省略导出注释
+    - path: _test\.go
+      linters:
+        - gosec
+        - errcheck
+        - revive

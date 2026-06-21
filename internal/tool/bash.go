@@ -14,6 +14,9 @@ import (
 // maxBashOutput bash 输出上限（1MB），超过截断并附加提示。
 const maxBashOutput = 1 << 20
 
+// maxBashTimeoutMs bash 超时上限（600s），超过拒绝以避免长时间挂起。
+const maxBashTimeoutMs = 600000
+
 type Bash struct {
 	defaultTimeout time.Duration
 }
@@ -55,6 +58,9 @@ func (b *Bash) Run(ctx context.Context, args json.RawMessage) Result {
 		return ErrorResult("command is required")
 	}
 
+	if a.TimeoutMs > maxBashTimeoutMs {
+		return ErrorResult("timeout_ms too large (max %dms)", maxBashTimeoutMs)
+	}
 	timeout := b.defaultTimeout
 	if a.TimeoutMs > 0 {
 		timeout = time.Duration(a.TimeoutMs) * time.Millisecond
@@ -91,6 +97,11 @@ func (b *Bash) Run(ctx context.Context, args json.RawMessage) Result {
 	output := buf.String()
 	if limited.truncated && output != "" {
 		output += "\n...[output truncated at 1MB]"
+	}
+	// 先检查进程是否成功退出，再判断 ctx.Err()，避免竞态：
+	// ctx 可能已超时但命令恰好在 cancel 触发前正常退出。
+	if cmd.ProcessState != nil && cmd.ProcessState.Success() {
+		return Result{Content: output}
 	}
 	if err != nil {
 		if ctx.Err() != nil {

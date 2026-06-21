@@ -10,11 +10,12 @@ import (
 
 // Agent 多步 think-act 循环。
 type Agent struct {
-	provider   llm.Provider
-	dispatcher *tool.Dispatcher
-	tools      []llm.ToolDef
-	maxSteps   int
-	model      string
+	provider     llm.Provider
+	dispatcher   *tool.Dispatcher
+	tools        []llm.ToolDef
+	maxSteps     int
+	model        string
+	systemPrompt string // 系统提示词，默认用 prompt.go 的 SystemPrompt
 }
 
 type Option func(*Agent)
@@ -27,11 +28,17 @@ func WithModel(m string) Option {
 	return func(a *Agent) { a.model = m }
 }
 
+// WithSystemPrompt 设置 agent 的系统提示词，覆盖默认的 SystemPrompt。
+func WithSystemPrompt(p string) Option {
+	return func(a *Agent) { a.systemPrompt = p }
+}
+
 func New(provider llm.Provider, registry *tool.Registry, opts ...Option) *Agent {
 	a := &Agent{
-		provider:   provider,
-		dispatcher: tool.NewDispatcher(registry),
-		maxSteps:   20,
+		provider:     provider,
+		dispatcher:   tool.NewDispatcher(registry),
+		maxSteps:     20,
+		systemPrompt: SystemPrompt, // 默认用 prompt.go 的 SystemPrompt
 	}
 	for _, o := range opts {
 		o(a)
@@ -88,6 +95,7 @@ func (a *Agent) Run(ctx context.Context, userInput string, events chan<- Event) 
 // messages 是指针，agent 会追加 assistant 和 tool 消息。
 // 注意：失败后 messages 状态不可信（可能已追加部分 assistant/tool 消息），
 // 调用方应丢弃 messages，不要基于失败后的状态继续复用。
+// The events channel is closed by Run/RunWithHistory when the loop terminates.
 func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, events chan<- Event) error {
 	defer close(events)
 
@@ -97,7 +105,7 @@ func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, eve
 	for step := 0; step < a.maxSteps; step++ {
 		req := llm.Request{
 			Model:    a.model,
-			System:   SystemPrompt,
+			System:   a.systemPrompt,
 			Messages: *messages,
 			Tools:    a.tools,
 		}
@@ -145,7 +153,7 @@ func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, eve
 					return fmt.Errorf("step %d truncated (stop_reason=%s), increase max_tokens", step, e.StopReason)
 				}
 			case llm.Error:
-				return e.Err
+				return fmt.Errorf("step %d stream error: %w", step, e.Err)
 			}
 		}
 

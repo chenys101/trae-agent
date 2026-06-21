@@ -22,7 +22,7 @@ func NewOpenAI(apiKey, baseURL, defaultModel string) *OpenAI {
 	if baseURL == "" {
 		baseURL = "https://api.openai.com"
 	}
-	return &OpenAI{apiKey: apiKey, baseURL: baseURL, defaultModel: defaultModel}
+	return &OpenAI{apiKey: apiKey, baseURL: strings.TrimRight(baseURL, "/"), defaultModel: defaultModel}
 }
 
 func (o *OpenAI) Name() string { return "openai" }
@@ -50,7 +50,7 @@ type openaiToolFunc struct {
 
 type openaiMsg struct {
 	Role       string           `json:"role"`
-	Content    string           `json:"content"`
+	Content    string           `json:"content,omitempty"`
 	ToolCalls  []openaiToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string           `json:"tool_call_id,omitempty"`
 }
@@ -108,13 +108,11 @@ func (o *OpenAI) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 	bodyReq := openaiRequest{
 		Model:         model,
 		Messages:      msgs,
+		MaxTokens:     req.MaxTokens,
 		Temperature:   req.Temperature,
 		Stream:        true,
 		StreamOptions: &openaiStreamOpts{IncludeUsage: true},
 		Tools:         tools,
-	}
-	if req.MaxTokens > 0 {
-		bodyReq.MaxTokens = req.MaxTokens
 	}
 
 	body, err := json.Marshal(bodyReq)
@@ -189,11 +187,8 @@ func (o *OpenAI) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- Stre
 		}
 
 		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		data := strings.TrimPrefix(line, "data: ")
-		if data == "" {
+		field, data := parseSSELine(line)
+		if field != "data" || data == "" {
 			continue
 		}
 		if data == "[DONE]" {

@@ -15,6 +15,9 @@ var (
 
 type loggerCloserKey struct{}
 
+// configKey 用于在 context 中存取已加载的 config，避免子命令重复加载。
+type configKey struct{}
+
 func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "trae",
@@ -22,17 +25,21 @@ func NewRootCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// config 在此加载一次并存入 context，子命令通过 configFromCmd 取出复用，
+			// 避免 run / interactive / show-config 各自重复加载。
 			cfg, err := config.Load(config.LoadOptions{})
 			if err != nil {
 				return err
 			}
+			ctx := context.WithValue(cmd.Context(), configKey{}, cfg)
 			l, err := logger.Init(cfg.LogLevel)
 			if err != nil {
 				return err
 			}
 			if closer, ok := l.(interface{ Close() error }); ok {
-				cmd.SetContext(context.WithValue(cmd.Context(), loggerCloserKey{}, closer))
+				ctx = context.WithValue(ctx, loggerCloserKey{}, closer)
 			}
+			cmd.SetContext(ctx)
 			return nil
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
@@ -49,4 +56,16 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(NewRunCmd())
 	root.AddCommand(NewInteractiveCmd())
 	return root
+}
+
+// configFromCmd 从 cmd.Context() 取出 PersistentPreRunE 已加载的 config。
+// 若 context 中不存在（如子命令被直接构造执行、未走 root 的 PersistentPreRunE），
+// 则降级为现场加载，保证测试与独立调用可用。
+func configFromCmd(cmd *cobra.Command) (config.Config, error) {
+	if ctx := cmd.Context(); ctx != nil {
+		if v, ok := ctx.Value(configKey{}).(config.Config); ok {
+			return v, nil
+		}
+	}
+	return config.Load(config.LoadOptions{})
 }

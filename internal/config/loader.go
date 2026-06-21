@@ -1,9 +1,11 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -51,6 +53,14 @@ func Load(opts LoadOptions) (Config, error) {
 	if v := os.Getenv("TRAE_LOG_LEVEL"); v != "" {
 		cfg.LogLevel = v
 	}
+	// 约定 env：TRAE_PROVIDER_<NAME>_API_KEY 覆盖对应 provider 的 api_key，
+	// 方便 CI/容器场景不落盘密钥。name 归一化为大写、非 [A-Z0-9] 转下划线。
+	for name, pc := range cfg.Providers {
+		if v := os.Getenv("TRAE_PROVIDER_" + envKeyName(name) + "_API_KEY"); v != "" {
+			pc.APIKey = v
+			cfg.Providers[name] = pc
+		}
+	}
 
 	// 4. flag
 	if opts.DefaultProvider != "" {
@@ -77,10 +87,27 @@ func loadYaml(path string) (Config, error) {
 	if err != nil {
 		return cfg, err
 	}
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	// 开启 KnownFields：未知字段报错，避免配置拼写错误被静默忽略。
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
 		return cfg, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return cfg, nil
+}
+
+// envKeyName 将 provider name 归一化为 env 变量片段：大写 + 非 [A-Z0-9] 转下划线。
+// 例如 "anthropic" -> "ANTHROPIC"，"openai-compatible" -> "OPENAI_COMPATIBLE"。
+func envKeyName(name string) string {
+	var b strings.Builder
+	for _, r := range strings.ToUpper(name) {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	return b.String()
 }
 
 // merge 用 src 覆盖 dst，零值不覆盖。

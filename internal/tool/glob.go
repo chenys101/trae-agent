@@ -71,8 +71,19 @@ func (Glob) Run(ctx context.Context, args json.RawMessage) Result {
 
 // matchGlob 支持 ** 通配。
 func matchGlob(pattern, name string) (bool, error) {
-	parts := strings.Split(pattern, "/")
-	nameParts := strings.Split(name, string(filepath.Separator))
+	// 统一用 ToSlash 后按 "/" 分割，避免 Windows 上 pattern 与 name 分隔符不一致。
+	parts := strings.Split(filepath.ToSlash(pattern), "/")
+	nameParts := strings.Split(filepath.ToSlash(name), "/")
+	// 限制 ** 数量，避免多个 ** 导致指数级回溯（ReDoS 风险）。
+	doubleStar := 0
+	for _, p := range parts {
+		if p == "**" {
+			doubleStar++
+		}
+	}
+	if doubleStar > 5 {
+		return false, nil
+	}
 	return matchSegments(parts, nameParts)
 }
 

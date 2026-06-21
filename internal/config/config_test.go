@@ -10,6 +10,9 @@ import (
 func TestLoad_defaultOnly(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
+	// 隔离 TRAE_* env，避免外部环境干扰默认值断言。
+	t.Setenv("TRAE_DEFAULT_PROVIDER", "")
+	t.Setenv("TRAE_LOG_LEVEL", "")
 	cfg, err := Load(LoadOptions{})
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
@@ -25,6 +28,8 @@ func TestLoad_defaultOnly(t *testing.T) {
 func TestLoad_userConfig(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
+	t.Setenv("TRAE_DEFAULT_PROVIDER", "")
+	t.Setenv("TRAE_LOG_LEVEL", "")
 	userCfg := filepath.Join(tmp, ".trae", "config.yaml")
 	writeFile(t, userCfg, `
 default_provider: anthropic
@@ -45,6 +50,8 @@ log_level: debug
 func TestLoad_projectOverridesUser(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
+	t.Setenv("TRAE_DEFAULT_PROVIDER", "")
+	t.Setenv("TRAE_LOG_LEVEL", "")
 	userCfg := filepath.Join(tmp, ".trae", "config.yaml")
 	writeFile(t, userCfg, `
 default_provider: anthropic
@@ -69,6 +76,7 @@ default_provider: openai
 func TestLoad_envOverridesAll(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
+	t.Setenv("TRAE_LOG_LEVEL", "")
 	userCfg := filepath.Join(tmp, ".trae", "config.yaml")
 	writeFile(t, userCfg, `
 default_provider: anthropic
@@ -87,6 +95,7 @@ func TestLoad_flagOverridesAll(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 	t.Setenv("TRAE_DEFAULT_PROVIDER", "openai")
+	t.Setenv("TRAE_LOG_LEVEL", "")
 	cfg, err := Load(LoadOptions{DefaultProvider: "gemini"})
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
@@ -102,6 +111,8 @@ func TestLoad_flagOverridesAll(t *testing.T) {
 func TestLoad_mergeMaxStepsAndSystemPrompt(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
+	t.Setenv("TRAE_DEFAULT_PROVIDER", "")
+	t.Setenv("TRAE_LOG_LEVEL", "")
 	userCfg := filepath.Join(tmp, ".trae", "config.yaml")
 	writeFile(t, userCfg, `
 max_steps: 50
@@ -124,6 +135,10 @@ system_prompt: "You are a test agent"
 func TestLoad_mergeProviderFieldLevel(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
+	t.Setenv("TRAE_DEFAULT_PROVIDER", "")
+	t.Setenv("TRAE_LOG_LEVEL", "")
+	// 隔离约定 env，避免外部 TRAE_PROVIDER_ANTHROPIC_API_KEY 覆盖 user config 的 key。
+	t.Setenv("TRAE_PROVIDER_ANTHROPIC_API_KEY", "")
 	userCfg := filepath.Join(tmp, ".trae", "config.yaml")
 	writeFile(t, userCfg, `
 model_providers:

@@ -93,9 +93,15 @@ func (c *Compactor) summarize(ctx context.Context, messages []llm.Message) (stri
 	// 把历史拼成文本
 	var b strings.Builder
 	for _, m := range messages {
-		fmt.Fprintf(&b, "%s: %s", m.Role, m.Content)
-		for _, tc := range m.ToolCalls {
-			fmt.Fprintf(&b, " [tool: %s %s]", tc.Name, tc.Args)
+		switch m.Role {
+		case llm.RoleTool:
+			// 标注 ToolCallID，让摘要能关联 tool result 与其 tool_call
+			fmt.Fprintf(&b, "tool(result for %s): %s", m.ToolCallID, m.Content)
+		default:
+			fmt.Fprintf(&b, "%s: %s", m.Role, m.Content)
+			for _, tc := range m.ToolCalls {
+				fmt.Fprintf(&b, " [tool: %s %s]", tc.Name, tc.Args)
+			}
 		}
 		b.WriteString("\n")
 	}
@@ -126,6 +132,8 @@ func (c *Compactor) summarize(ctx context.Context, messages []llm.Message) (stri
 		case llm.Done:
 			// 摘要完成，继续等 channel 关闭
 		case llm.Error:
+			// 排空 channel，避免发送 goroutine 阻塞泄漏
+			go func() { for range ch {} }()
 			return "", e.Err
 		}
 	}

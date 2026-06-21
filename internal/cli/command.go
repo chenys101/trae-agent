@@ -35,9 +35,13 @@ func NewCommandRegistry() *CommandRegistry {
 	return r
 }
 
+// Register 注册命令。重复命令名会覆盖 map 中的旧条目，但不重复 append order，
+// 保持 /help 列表不出现重复项。
 func (r *CommandRegistry) Register(cmd *Command) {
+	if _, exists := r.commands[cmd.Name]; !exists {
+		r.order = append(r.order, cmd.Name)
+	}
 	r.commands[cmd.Name] = cmd
-	r.order = append(r.order, cmd.Name)
 }
 
 func (r *CommandRegistry) Get(name string) (*Command, bool) {
@@ -54,12 +58,14 @@ func (r *CommandRegistry) List() []*Command {
 }
 
 // Completer 返回 readline 补全器。
+// 构造 []PrefixCompleterInterface 后一次性传入 NewPrefixCompleter，
+// 避免直接操作返回值的内部 Children 字段。
 func (r *CommandRegistry) Completer() *readline.PrefixCompleter {
-	pc := readline.NewPrefixCompleter()
+	items := make([]readline.PrefixCompleterInterface, 0, len(r.order))
 	for _, cmd := range r.List() {
-		pc.Children = append(pc.Children, readline.PcItem(cmd.Name))
+		items = append(items, readline.PcItem(cmd.Name))
 	}
-	return pc
+	return readline.NewPrefixCompleter(items...)
 }
 
 func (r *CommandRegistry) registerBuiltin() {
@@ -100,12 +106,17 @@ func (r *CommandRegistry) registerBuiltin() {
 	})
 	r.Register(&Command{
 		Name:        "/status",
-		Description: "Show current status (provider, model, steps)",
+		Description: "Show session status (session, model, messages)",
 		Usage:       "/status",
 		Handler: func(repl *REPL, args []string) CommandResult {
+			// /status 专注会话状态，token 用量由 /cost 提供
+			model := "(none)"
+			if repl.agent != nil {
+				model = repl.agent.Model()
+			}
 			return CommandResult{Message: fmt.Sprintf(
-				"messages: %d\nusage: in=%d out=%d",
-				len(repl.messages), repl.totalUsage.InputTokens, repl.totalUsage.OutputTokens,
+				"session: %s\nmodel: %s\nmessages: %d",
+				repl.sessionID, model, len(repl.messages),
 			)}
 		},
 	})
@@ -114,6 +125,7 @@ func (r *CommandRegistry) registerBuiltin() {
 		Description: "Show total token usage",
 		Usage:       "/cost",
 		Handler: func(repl *REPL, args []string) CommandResult {
+			// /cost 专注 token 用量，会话状态由 /status 提供
 			return CommandResult{Message: fmt.Sprintf(
 				"total tokens: input=%d output=%d",
 				repl.totalUsage.InputTokens, repl.totalUsage.OutputTokens,

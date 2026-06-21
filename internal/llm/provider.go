@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Role 消息角色。
@@ -16,7 +17,7 @@ const (
 	RoleTool      Role = "tool"
 )
 
-// Message 单条消息。M1 只用 Content 文本，ToolCalls 留 M2。
+// Message 单条消息。
 type Message struct {
 	Role       Role       `json:"role"`
 	Content    string     `json:"content"`
@@ -36,9 +37,9 @@ type Request struct {
 
 // ToolCall 非流式工具调用。
 type ToolCall struct {
-	ID   string
-	Name string
-	Args string
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Args string `json:"args"`
 }
 
 // ToolDef 工具定义。
@@ -50,8 +51,8 @@ type ToolDef struct {
 
 // Usage token 用量统计。
 type Usage struct {
-	InputTokens  int
-	OutputTokens int
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
 }
 
 // StreamEvent 流式事件接口。
@@ -66,8 +67,9 @@ func (TextDelta) isStreamEvent() {}
 
 // ToolCallDelta 工具调用增量。
 type ToolCallDelta struct {
-	ID        string
-	Name      string
+	ID   string
+	Name string
+	// ArgsDelta 当前实现发送完整累积 args，非真增量。
 	ArgsDelta string
 }
 
@@ -104,4 +106,22 @@ func NewProvider(name, apiKey, baseURL, defaultModel string) (Provider, error) {
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", name)
 	}
+}
+
+// parseSSELine 按 SSE 规范解析单行：以 ":" 分割 field/value，
+// 去掉 value 开头的可选单空格。返回 field 名与 value。
+// 注释行（以 ":" 开头）返回空 field。
+func parseSSELine(line string) (field, value string) {
+	if strings.HasPrefix(line, ":") {
+		return "", ""
+	}
+	field, value, ok := strings.Cut(line, ":")
+	if !ok {
+		return field, ""
+	}
+	// SSE 规范：value 开头若有单个空格则去掉
+	if strings.HasPrefix(value, " ") {
+		value = value[1:]
+	}
+	return field, value
 }

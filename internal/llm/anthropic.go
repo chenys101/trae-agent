@@ -37,7 +37,7 @@ func NewAnthropic(apiKey, baseURL, defaultModel string) *Anthropic {
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com"
 	}
-	return &Anthropic{apiKey: apiKey, baseURL: baseURL, defaultModel: defaultModel}
+	return &Anthropic{apiKey: apiKey, baseURL: strings.TrimRight(baseURL, "/"), defaultModel: defaultModel}
 }
 
 func (a *Anthropic) Name() string { return "anthropic" }
@@ -160,11 +160,8 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 		}
 
 		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		data := strings.TrimPrefix(line, "data: ")
-		if data == "" || data == "[DONE]" {
+		field, data := parseSSELine(line)
+		if field != "data" || data == "" {
 			continue
 		}
 
@@ -192,14 +189,11 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 			inputTokens = evt.Message.Usage.InputTokens
 		case "content_block_start":
 			var blk struct {
-				Index int `json:"index"`
-				ContentBlock struct {
-					Type string `json:"type"`
-					ID   string `json:"id"`
-					Name string `json:"name"`
-				} `json:"content_block"`
+				Type string `json:"type"`
+				ID   string `json:"id"`
+				Name string `json:"name"`
 			}
-			if err := json.Unmarshal([]byte(data), &blk); err != nil {
+			if err := json.Unmarshal(evt.ContentBlock, &blk); err != nil {
 				select {
 				case ch <- Error{Err: fmt.Errorf("anthropic: parse content_block_start: %w", err)}:
 				case <-ctx.Done():
@@ -207,10 +201,10 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 				}
 				continue
 			}
-			if blk.ContentBlock.Type == "tool_use" {
-				toolAccums[blk.Index] = &toolCallAccum{
-					ID:   blk.ContentBlock.ID,
-					Name: blk.ContentBlock.Name,
+			if blk.Type == "tool_use" {
+				toolAccums[evt.Index] = &toolCallAccum{
+					ID:   blk.ID,
+					Name: blk.Name,
 				}
 			}
 		case "content_block_delta":
@@ -239,9 +233,7 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 				}
 			}
 		case "message_delta":
-			if evt.Usage.OutputTokens > 0 {
-				outputTokens = evt.Usage.OutputTokens
-			}
+			outputTokens = evt.Usage.OutputTokens
 			var d struct {
 				StopReason string `json:"stop_reason"`
 			}
@@ -330,11 +322,15 @@ func toAnthropicMsgs(msgs []Message) []anthropicMsg {
 		role := string(m.Role)
 		if m.ToolCallID != "" {
 			role = "user"
-			blocks = []anthropicContentBlock{{
+			blk := anthropicContentBlock{
 				Type:      "tool_result",
 				ToolUseID: m.ToolCallID,
-				Content:   m.Content,
-			}}
+			}
+			// 空字符串时不设置 Content 字段（any 类型的 "" 非 nil，omitempty 不会忽略）
+			if m.Content != "" {
+				blk.Content = m.Content
+			}
+			blocks = []anthropicContentBlock{blk}
 		} else if len(m.ToolCalls) > 0 {
 			if m.Content != "" {
 				blocks = append(blocks, anthropicContentBlock{Type: "text", Text: m.Content})

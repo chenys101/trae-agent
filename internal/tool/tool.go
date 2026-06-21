@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 )
 
 // Result 工具执行结果。
@@ -49,6 +50,10 @@ func (r *Registry) List() []Tool {
 	for _, t := range r.tools {
 		out = append(out, t)
 	}
+	// 按 Name 排序，保证返回顺序确定（map 遍历顺序不确定）。
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Name() < out[j].Name()
+	})
 	return out
 }
 

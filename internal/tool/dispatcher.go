@@ -2,13 +2,14 @@ package tool
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 )
 
 // Call 单个工具调用请求。
 type Call struct {
 	Name string
-	Args []byte // json.RawMessage
+	Args json.RawMessage
 }
 
 // CallResult 工具调用结果，保持与 Call 的顺序。

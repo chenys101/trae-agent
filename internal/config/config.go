@@ -78,10 +78,12 @@ func (c Config) Redacted() redactedConfig {
 }
 
 // Default 返回内置默认配置。
+// MaxSteps 等默认值统一在此设置，调用方（run/interactive）不再各自兜底。
 func Default() Config {
 	return Config{
 		DefaultProvider: "",
 		Providers:       map[string]ProviderConfig{},
 		LogLevel:        "info",
+		MaxSteps:        20,
 	}
 }
