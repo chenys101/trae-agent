@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,7 +18,8 @@ import (
 type mockProvider struct {
 	scripts [][]llm.StreamEvent // 每次调用返回一个脚本
 	calls   int
-	block   bool // 如果为 true，Stream 阻塞直到 ctx 取消，返回 ctx.Err()
+	mu      sync.Mutex // 保护 calls，允许并行 Stream 调用
+	block   bool       // 如果为 true，Stream 阻塞直到 ctx 取消，返回 ctx.Err()
 }
 
 func (m *mockProvider) Name() string { return "mock" }
@@ -27,8 +29,10 @@ func (m *mockProvider) Stream(ctx context.Context, req llm.Request) (<-chan llm.
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
+	m.mu.Lock()
 	script := m.scripts[m.calls]
 	m.calls++
+	m.mu.Unlock()
 	ch := make(chan llm.StreamEvent, len(script))
 	go func() {
 		defer close(ch)
