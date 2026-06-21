@@ -139,4 +139,52 @@ func (r *CommandRegistry) registerBuiltin() {
 			return CommandResult{Message: fmt.Sprintf("compacted: %d → %d tokens (%d messages)", before, after, len(repl.messages))}
 		},
 	})
+	r.Register(&Command{
+		Name:        "/sessions",
+		Description: "List recent sessions",
+		Usage:       "/sessions",
+		Handler: func(repl *REPL, args []string) CommandResult {
+			if repl.store == nil {
+				return CommandResult{Message: "session store unavailable"}
+			}
+			list, err := repl.store.List()
+			if err != nil {
+				return CommandResult{Message: "list sessions: " + err.Error()}
+			}
+			if len(list) == 0 {
+				return CommandResult{Message: "no saved sessions"}
+			}
+			var b strings.Builder
+			b.WriteString("Recent sessions:\n")
+			for i, s := range list {
+				if i >= 10 {
+					break
+				}
+				fmt.Fprintf(&b, "  %s  %d msgs  %s\n",
+					s.ID, len(s.Messages), s.UpdatedAt.Format("2006-01-02 15:04"))
+			}
+			return CommandResult{Message: b.String()}
+		},
+	})
+	r.Register(&Command{
+		Name:        "/resume",
+		Description: "Resume a session (usage: /resume [session-id])",
+		Usage:       "/resume [session-id]",
+		Handler: func(repl *REPL, args []string) CommandResult {
+			if repl.store == nil {
+				return CommandResult{Message: "session store unavailable"}
+			}
+			if len(args) == 0 {
+				return CommandResult{Message: "usage: /resume <session-id> (use /sessions to list)"}
+			}
+			sess, err := repl.store.Load(args[0])
+			if err != nil {
+				return CommandResult{Message: "load session: " + err.Error()}
+			}
+			repl.messages = sess.Messages
+			repl.totalUsage = sess.Usage
+			repl.sessionID = sess.ID
+			return CommandResult{Message: fmt.Sprintf("resumed session %s (%d messages)", sess.ID, len(sess.Messages))}
+		},
+	})
 }

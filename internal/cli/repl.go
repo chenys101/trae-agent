@@ -67,12 +67,14 @@ func (r *REPL) Run(ctx context.Context) error {
 	for {
 		line, err := rl.Readline()
 		if err == io.EOF {
+			r.saveSession()
 			r.println("bye")
 			return nil
 		}
 		if err == readline.ErrInterrupt {
 			// readline 捕获了 SIGINT（等待输入时）
 			if interrupter.Handle() {
+				r.saveSession()
 				return nil
 			}
 			continue
@@ -162,6 +164,21 @@ func (r *REPL) doCompact() (beforeTokens, afterTokens int, err error) {
 	r.messages = newMsgs
 	afterTokens = agent.EstimateTokens(r.messages)
 	return beforeTokens, afterTokens, nil
+}
+
+// saveSession 保存当前会话到 store。
+func (r *REPL) saveSession() {
+	if r.store == nil || len(r.messages) == 0 {
+		return
+	}
+	sess := &session.Session{
+		ID:       r.sessionID,
+		Messages: r.messages,
+		Usage:    r.totalUsage,
+	}
+	if err := r.store.Save(sess); err != nil {
+		r.println("warning: failed to save session: " + err.Error())
+	}
 }
 
 func (r *REPL) println(s string) {
