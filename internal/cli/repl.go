@@ -59,6 +59,8 @@ func (r *REPL) Run(ctx context.Context) error {
 	defer rl.Close()
 	r.rl = rl
 	r.ctx = ctx
+	// 统一在退出时保存会话，覆盖所有退出路径（EOF / ErrInterrupt / /exit / readline error）
+	defer r.saveSession()
 
 	r.println(r.renderer.Welcome())
 
@@ -67,14 +69,12 @@ func (r *REPL) Run(ctx context.Context) error {
 	for {
 		line, err := rl.Readline()
 		if err == io.EOF {
-			r.saveSession()
 			r.println("bye")
 			return nil
 		}
 		if err == readline.ErrInterrupt {
 			// readline 捕获了 SIGINT（等待输入时）
 			if interrupter.Handle() {
-				r.saveSession()
 				return nil
 			}
 			continue

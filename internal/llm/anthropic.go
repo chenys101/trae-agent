@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 )
 
@@ -218,15 +219,9 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 				stopReason = d.StopReason
 			}
 		case "message_stop":
-			for i := 0; i < len(toolAccums); i++ {
-				if acc, ok := toolAccums[i]; ok {
-					select {
-					case ch <- ToolCallDelta{ID: acc.ID, Name: acc.Name, ArgsDelta: acc.Args.String()}:
-					case <-ctx.Done():
-						return
-					}
-				}
-			}
+			// 按 index 有序 flush，避免混合 content block（text 在前、tool_use 在后）
+			// 时按 map 大小遍历漏掉非 0 起始的 tool_use
+			flushAnthropicToolCalls(ctx, ch, toolAccums)
 			select {
 			case ch <- Done{Usage: Usage{InputTokens: inputTokens, OutputTokens: outputTokens}, StopReason: stopReason}:
 			case <-ctx.Done():
@@ -251,6 +246,34 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 		select {
 		case ch <- Error{Err: fmt.Errorf("read sse: %w", err)}:
 		case <-ctx.Done():
+		}
+		return
+	}
+	// 流结束但未收到 message_stop（连接被截断/服务端 bug），兜底发 Done
+	// 避免消费者无法区分正常结束与异常中断
+	flushAnthropicToolCalls(ctx, ch, toolAccums)
+	select {
+	case ch <- Done{Usage: Usage{InputTokens: inputTokens, OutputTokens: outputTokens}, StopReason: stopReason}:
+	case <-ctx.Done():
+	}
+}
+
+// flushAnthropicToolCalls 按 index 升序 flush 工具调用，保证顺序稳定。
+func flushAnthropicToolCalls(ctx context.Context, ch chan<- StreamEvent, toolAccums map[int]*toolCallAccum) {
+	if len(toolAccums) == 0 {
+		return
+	}
+	indices := make([]int, 0, len(toolAccums))
+	for i := range toolAccums {
+		indices = append(indices, i)
+	}
+	sort.Ints(indices)
+	for _, i := range indices {
+		acc := toolAccums[i]
+		select {
+		case ch <- ToolCallDelta{ID: acc.ID, Name: acc.Name, ArgsDelta: acc.Args.String()}:
+		case <-ctx.Done():
+			return
 		}
 	}
 }

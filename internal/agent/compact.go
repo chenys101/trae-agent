@@ -36,8 +36,7 @@ func (c *Compactor) Compact(ctx context.Context, messages []llm.Message) ([]llm.
 	}
 
 	keep := c.cm.CompactKeep()
-	toSummarize := messages[:len(messages)-keep]
-	recent := messages[len(messages)-keep:]
+	recent, toSummarize := splitForCompact(messages, keep)
 
 	summary, err := c.summarize(ctx, toSummarize)
 	if err != nil {
@@ -45,13 +44,40 @@ func (c *Compactor) Compact(ctx context.Context, messages []llm.Message) ([]llm.
 	}
 
 	// 构造新历史：摘要消息 + 保留的最近消息
-	result := make([]llm.Message, 0, keep+1)
+	// 摘要用 user 角色，紧跟一个空 assistant 占位，避免 recent[0] 也是 user 时
+	// 出现连续 user，或 recent[0] 是 tool 时出现 user→tool 非法序列
+	result := make([]llm.Message, 0, len(recent)+2)
 	result = append(result, llm.Message{
 		Role: llm.RoleUser,
 		Content: fmt.Sprintf("[Previous conversation summary]\n%s\n[End of summary. Continue from here.]", summary),
 	})
+	result = append(result, llm.Message{Role: llm.RoleAssistant, Content: "Understood. I'll continue from the summarized context."})
 	result = append(result, recent...)
 	return result, nil
+}
+
+// splitForCompact 把 messages 切成 (recent, toSummarize)。
+// 切分点会对齐 tool_call/tool_result 配对边界：
+//   - 若 recent[0] 是 RoleTool（其 tool_call 落在 toSummarize 侧），把该 tool 消息
+//     及其之前所有连续 tool 消息一起移到 toSummarize 侧
+//   - 若 toSummarize 末尾是带 ToolCalls 的 assistant，但其 tool result 落在 recent 侧，
+//     把该 assistant 消息移到 recent 侧
+func splitForCompact(messages []llm.Message, keep int) (recent, toSummarize []llm.Message) {
+	split := len(messages) - keep
+	if split <= 0 {
+		return messages, nil
+	}
+	// 向前调整：若 recent 第一条是 RoleTool，说明其对应的 assistant(tool_calls) 在 toSummarize 末尾
+	// 把 recent 开头连续的 RoleTool 消息移到 toSummarize
+	for split < len(messages) && messages[split].Role == llm.RoleTool {
+		split++
+	}
+	// 向后调整：若 toSummarize 末尾是带 ToolCalls 的 assistant，但其 tool result 在 recent 侧
+	// 把该 assistant 移到 recent
+	for split > 0 && len(messages[split-1].ToolCalls) > 0 {
+		split--
+	}
+	return messages[split:], messages[:split]
 }
 
 // summarize 调 LLM 生成摘要。

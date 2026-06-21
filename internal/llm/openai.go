@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 )
 
@@ -155,13 +156,21 @@ func (o *OpenAI) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- Stre
 	toolAccums := map[int]*toolCallAccum{}
 
 	flushToolCalls := func() {
-		for i := 0; i < len(toolAccums); i++ {
-			if acc, ok := toolAccums[i]; ok {
-				select {
-				case ch <- ToolCallDelta{ID: acc.ID, Name: acc.Name, ArgsDelta: acc.Args.String()}:
-				case <-ctx.Done():
-					return
-				}
+		// 按 index 升序 flush，避免非连续 index 时漏掉工具调用
+		if len(toolAccums) == 0 {
+			return
+		}
+		indices := make([]int, 0, len(toolAccums))
+		for i := range toolAccums {
+			indices = append(indices, i)
+		}
+		sort.Ints(indices)
+		for _, i := range indices {
+			acc := toolAccums[i]
+			select {
+			case ch <- ToolCallDelta{ID: acc.ID, Name: acc.Name, ArgsDelta: acc.Args.String()}:
+			case <-ctx.Done():
+				return
 			}
 		}
 	}

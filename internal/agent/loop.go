@@ -103,7 +103,9 @@ func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, eve
 		}
 
 		var textBuf string
-		var toolCalls []llm.ToolCall
+		// 按 ID 累积流式 tool_call delta，避免多 delta 到达时产生重复/截断
+		toolAccums := map[string]*llm.ToolCall{}
+		var toolOrder []string // 保持首次出现顺序
 		var usage llm.Usage
 
 		for ev := range ch {
@@ -116,14 +118,20 @@ func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, eve
 					return ctx.Err()
 				}
 			case llm.ToolCallDelta:
-				tc := llm.ToolCall{
-					ID:   e.ID,
-					Name: e.Name,
-					Args: e.ArgsDelta,
+				acc, ok := toolAccums[e.ID]
+				if !ok {
+					acc = &llm.ToolCall{ID: e.ID, Name: e.Name}
+					toolAccums[e.ID] = acc
+					toolOrder = append(toolOrder, e.ID)
 				}
-				toolCalls = append(toolCalls, tc)
+				if e.Name != "" {
+					acc.Name = e.Name
+				}
+				// ArgsDelta 可能是完整 args（当前 provider 实现）或真增量；
+				// 真增量场景下需 append，完整 args 场景下 append 等价于赋值（首次为空）
+				acc.Args += e.ArgsDelta
 				select {
-				case events <- ToolCallEvent{Name: tc.Name, Args: tc.Args}:
+				case events <- ToolCallEvent{Name: acc.Name, Args: acc.Args}:
 				case <-ctx.Done():
 					return ctx.Err()
 				}
@@ -132,6 +140,12 @@ func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, eve
 			case llm.Error:
 				return e.Err
 			}
+		}
+
+		// flatten 累积的 tool calls，保持首次出现顺序
+		var toolCalls []llm.ToolCall
+		for _, id := range toolOrder {
+			toolCalls = append(toolCalls, *toolAccums[id])
 		}
 
 		// assistant 消息回灌

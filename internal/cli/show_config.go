@@ -17,7 +17,8 @@ func NewShowConfigCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, err := yaml.Marshal(cfg)
+			// 输出脱敏配置，避免泄漏 API key
+			data, err := yaml.Marshal(cfg.Redacted())
 			if err != nil {
 				return err
 			}

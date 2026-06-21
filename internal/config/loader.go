@@ -91,10 +91,36 @@ func merge(dst *Config, src Config) {
 	if src.LogLevel != "" {
 		dst.LogLevel = src.LogLevel
 	}
+	if src.SystemPrompt != "" {
+		dst.SystemPrompt = src.SystemPrompt
+	}
+	if src.MaxSteps != 0 {
+		dst.MaxSteps = src.MaxSteps
+	}
 	if dst.Providers == nil {
 		dst.Providers = map[string]ProviderConfig{}
 	}
 	for k, v := range src.Providers {
-		dst.Providers[k] = v
+		// 字段级合并：非零字段覆盖，零值保留 dst 原值
+		base := dst.Providers[k]
+		if v.APIKey != "" {
+			base.APIKey = v.APIKey
+		}
+		if v.Provider != "" {
+			base.Provider = v.Provider
+		}
+		if v.BaseURL != "" {
+			base.BaseURL = v.BaseURL
+		}
+		if v.DefaultModel != "" {
+			base.DefaultModel = v.DefaultModel
+		}
+		if v.MaxTokens != 0 {
+			base.MaxTokens = v.MaxTokens
+		}
+		if v.Temperature != 0 {
+			base.Temperature = v.Temperature
+		}
+		dst.Providers[k] = base
 	}
 }
