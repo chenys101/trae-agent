@@ -52,21 +52,29 @@ func buildAgent(cfg config.Config, providerFlag, modelFlag string) (*agent.Agent
 	}
 	llmProvider = llm.NewRetryable(llmProvider, defaultMaxRetries, defaultRetryBaseDelay)
 
-	// 构造工具
-	registry := tool.NewRegistry(
+	// 构造基础工具（不含 Task）。
+	// SubagentRunner 持有 baseRegistry，使子 agent 不能派发子 agent，避免无限递归。
+	baseTools := []tool.Tool{
 		tool.NewRead(),
 		tool.NewWrite(),
 		tool.NewEdit(),
 		tool.NewGlob(),
 		tool.NewGrep(),
 		tool.NewBash(defaultBashTimeout),
-	)
+	}
+	baseRegistry := tool.NewRegistry(baseTools...)
+
+	// 子 agent runner 复用主 agent 的 provider 和 baseRegistry
+	subagentRunner := agent.NewSubagentRunner(llmProvider, baseRegistry, modelFlag)
+
+	// 最终 registry 在基础工具之上加入 Task 工具
+	fullRegistry := tool.NewRegistry(append(baseTools, tool.NewTask(subagentRunner))...)
 
 	maxSteps := cfg.MaxSteps
 	if maxSteps == 0 {
 		maxSteps = defaultMaxStepsFallback
 	}
-	return agent.New(llmProvider, registry, agent.WithMaxSteps(maxSteps), agent.WithModel(modelFlag)), nil
+	return agent.New(llmProvider, fullRegistry, agent.WithMaxSteps(maxSteps), agent.WithModel(modelFlag)), nil
 }
 
 func NewRunCmd() *cobra.Command {
