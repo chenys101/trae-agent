@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -119,5 +120,45 @@ func TestEdit_replaceAll_notFound(t *testing.T) {
 	res := r.Run(context.Background(), args)
 	if !res.IsError {
 		t.Error("expected error for not found with replace_all")
+	}
+}
+
+func TestEdit_fileNotFound(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "missing.txt")
+	r := NewEdit()
+	args, _ := json.Marshal(map[string]string{
+		"file_path":  path,
+		"old_string": "a",
+		"new_string": "b",
+	})
+	res := r.Run(context.Background(), args)
+	if !res.IsError {
+		t.Error("expected error for missing file")
+	}
+	if !strings.Contains(res.Content, "file not found") {
+		t.Errorf("expected 'file not found' in error, got: %s", res.Content)
+	}
+}
+
+func TestEdit_overlappingMatch(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "f.txt")
+	// content="aaa" old_string="aa"：strings.Count 非重叠计数为 1，应替换成功
+	os.WriteFile(path, []byte("aaa"), 0o644)
+	r := NewEdit()
+	args, _ := json.Marshal(map[string]string{
+		"file_path":  path,
+		"old_string": "aa",
+		"new_string": "X",
+	})
+	res := r.Run(context.Background(), args)
+	if res.IsError {
+		t.Fatalf("expected success, got error: %s", res.Content)
+	}
+	data, _ := os.ReadFile(path)
+	// strings.Replace("aaa", "aa", "X", 1) = "Xa"
+	if string(data) != "Xa" {
+		t.Errorf("content = %q, want 'Xa'", data)
 	}
 }

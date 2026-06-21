@@ -2,8 +2,10 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bytedance/trae-agent/internal/llm"
 )
@@ -11,12 +13,23 @@ import (
 // mockCompactProvider 返回固定摘要。
 type mockCompactProvider struct {
 	response string
+	failWith error // 如果非 nil，发送 llm.Error 事件而非文本
+	block    bool  // 如果为 true，Stream 阻塞直到 ctx 取消，返回 ctx.Err()
 }
 
 func (m *mockCompactProvider) Name() string { return "mock" }
 func (m *mockCompactProvider) Stream(ctx context.Context, req llm.Request) (<-chan llm.StreamEvent, error) {
+	// 阻塞模式：用于测试 ctx 取消时 Compact 的行为
+	if m.block {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	ch := make(chan llm.StreamEvent, 2)
-	ch <- llm.TextDelta{Content: m.response}
+	if m.failWith != nil {
+		ch <- llm.Error{Err: m.failWith}
+	} else {
+		ch <- llm.TextDelta{Content: m.response}
+	}
 	ch <- llm.Done{}
 	close(ch)
 	return ch, nil
@@ -143,5 +156,93 @@ func TestCompactor_Compact_preservesToolResultPairing(t *testing.T) {
 				t.Errorf("orphaned tool message at result[%d]: no preceding assistant with ToolCalls", i)
 			}
 		}
+	}
+}
+
+// TestCompactor_Compact_summarizeFailureFallback 验证 summarize 失败时降级为截断策略。
+// mockCompactProvider 返回 llm.Error，验证 Compact 返回非 nil（降级结果）且包含 recent 消息。
+func TestCompactor_Compact_summarizeFailureFallback(t *testing.T) {
+	cm := NewContextManager(WithCompactKeep(2))
+	c := NewCompactor(&mockCompactProvider{failWith: errors.New("summarize failed")}, cm, "test-model")
+
+	// 5 条消息，keep=2，前 3 条需摘要，但 summarize 失败
+	msgs := []llm.Message{
+		{Role: llm.RoleUser, Content: "old1"},
+		{Role: llm.RoleAssistant, Content: "old2"},
+		{Role: llm.RoleUser, Content: "old3"},
+		{Role: llm.RoleAssistant, Content: "recent1"},
+		{Role: llm.RoleUser, Content: "recent2"},
+	}
+	result, err := c.Compact(context.Background(), msgs)
+	if err != nil {
+		t.Fatalf("Compact should not return error on summarize failure (fallback), got %v", err)
+	}
+	if result == nil {
+		t.Fatal("fallback result should not be nil")
+	}
+	// 降级结果：truncated user + assistant "Understood." + recent(2) = 4
+	if len(result) != 4 {
+		t.Fatalf("expected 4 messages (2 fallback + 2 recent), got %d", len(result))
+	}
+	// 第一条应是截断提示
+	if !strings.Contains(result[0].Content, "truncated") {
+		t.Errorf("first message should mention truncation, got %q", result[0].Content)
+	}
+	// recent 消息应保留在结果末尾
+	if result[len(result)-1].Content != "recent2" {
+		t.Errorf("last message should be recent2, got %q", result[len(result)-1].Content)
+	}
+	if result[len(result)-2].Content != "recent1" {
+		t.Errorf("second to last should be recent1, got %q", result[len(result)-2].Content)
+	}
+}
+
+// TestCompactor_Compact_contextCancel 验证 ctx 取消时 Compact 不挂起并返回降级结果。
+// mockCompactProvider 阻塞，ctx cancel 后 summarize 返回 ctx.Err()，
+// Compact 的降级策略会吞掉该 error 并返回截断结果（含 recent 消息）。
+func TestCompactor_Compact_contextCancel(t *testing.T) {
+	cm := NewContextManager(WithCompactKeep(2))
+	c := NewCompactor(&mockCompactProvider{block: true}, cm, "test-model")
+
+	msgs := []llm.Message{
+		{Role: llm.RoleUser, Content: "old1"},
+		{Role: llm.RoleAssistant, Content: "old2"},
+		{Role: llm.RoleUser, Content: "old3"},
+		{Role: llm.RoleAssistant, Content: "recent1"},
+		{Role: llm.RoleUser, Content: "recent2"},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	type compactResult struct {
+		msgs []llm.Message
+		err  error
+	}
+	resultCh := make(chan compactResult, 1)
+	go func() {
+		r, e := c.Compact(ctx, msgs)
+		resultCh <- compactResult{msgs: r, err: e}
+	}()
+
+	cancel()
+	select {
+	case got := <-resultCh:
+		// summarize 返回 ctx.Err()，但 Compact 降级策略吞掉该 error，
+		// 返回截断结果（nil error）。这里验证 Compact 不挂起、返回非 nil 降级结果且包含 recent 消息。
+		if got.err != nil {
+			t.Errorf("Compact returned error %v (fallback swallows ctx error)", got.err)
+		}
+		if got.msgs == nil {
+			t.Fatal("fallback result should not be nil")
+		}
+		// 降级结果：truncated user + assistant "Understood." + recent(2) = 4
+		if len(got.msgs) != 4 {
+			t.Fatalf("expected 4 messages (2 fallback + 2 recent), got %d", len(got.msgs))
+		}
+		// recent 消息应保留在末尾
+		if got.msgs[len(got.msgs)-1].Content != "recent2" {
+			t.Errorf("last message should be recent2, got %q", got.msgs[len(got.msgs)-1].Content)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Compact did not return after ctx cancel")
 	}
 }

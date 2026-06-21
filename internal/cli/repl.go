@@ -12,6 +12,18 @@ import (
 	"github.com/chzyer/readline"
 )
 
+// SessionStore 会话存储接口（供测试 mock）。
+type SessionStore interface {
+	Save(sess *session.Session) error
+	Load(id string) (*session.Session, error)
+	List() ([]*session.Session, error)
+}
+
+// Compactor 上下文压缩接口（供测试 mock）。
+type Compactor interface {
+	Compact(ctx context.Context, messages []llm.Message) ([]llm.Message, error)
+}
+
 // REPL 交互式会话。
 type REPL struct {
 	agent      *agent.Agent
@@ -21,9 +33,9 @@ type REPL struct {
 	messages   []llm.Message
 	totalUsage llm.Usage
 	ctxMgr     *agent.ContextManager
-	compactor  *agent.Compactor
-	store      *session.Store // Task 5 用，先定义
-	sessionID  string         // Task 5 用，先定义
+	compactor  Compactor
+	store      SessionStore // Task 5 用，先定义
+	sessionID  string       // Task 5 用，先定义
 	ctx        context.Context
 }
 
@@ -47,17 +59,20 @@ func NewREPL(a *agent.Agent) (*REPL, error) {
 
 // Run 启动 REPL 主循环，阻塞直到用户退出。
 func (r *REPL) Run(ctx context.Context) error {
-	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          "trae> ",
-		AutoComplete:    r.commands.Completer(),
-		InterruptPrompt: "^C",
-		EOFPrompt:       "exit",
-	})
-	if err != nil {
-		return fmt.Errorf("init readline: %w", err)
+	// 测试可注入 r.rl，跳过 readline 初始化
+	if r.rl == nil {
+		rl, err := readline.NewEx(&readline.Config{
+			Prompt:          "trae> ",
+			AutoComplete:    r.commands.Completer(),
+			InterruptPrompt: "^C",
+			EOFPrompt:       "exit",
+		})
+		if err != nil {
+			return fmt.Errorf("init readline: %w", err)
+		}
+		defer rl.Close()
+		r.rl = rl
 	}
-	defer rl.Close()
-	r.rl = rl
 	r.ctx = ctx
 	// 统一在退出时保存会话，覆盖所有退出路径（EOF / ErrInterrupt / /exit / readline error）
 	defer r.saveSession()
@@ -67,7 +82,7 @@ func (r *REPL) Run(ctx context.Context) error {
 	interrupter := NewInterruptHandler()
 
 	for {
-		line, err := rl.Readline()
+		line, err := r.rl.Readline()
 		if err == io.EOF {
 			r.println("bye")
 			return nil
