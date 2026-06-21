@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bytedance/trae-agent/internal/session"
 	"github.com/chzyer/readline"
 )
 
@@ -183,8 +184,9 @@ func (r *CommandRegistry) registerBuiltin() {
 			}
 			repl.messages = sess.Messages
 			repl.totalUsage = sess.Usage
-			repl.sessionID = sess.ID
-			return CommandResult{Message: fmt.Sprintf("resumed session %s (%d messages)", sess.ID, len(sess.Messages))}
+			// 生成新 sessionID，避免后续保存覆盖原会话
+			repl.sessionID = session.GenerateID()
+			return CommandResult{Message: fmt.Sprintf("resumed session %s (%d messages, saved as new session %s)", sess.ID, len(sess.Messages), repl.sessionID)}
 		},
 	})
 }

@@ -115,7 +115,13 @@ func TestStore_List_empty(t *testing.T) {
 
 func TestGenerateID(t *testing.T) {
 	id := GenerateID()
-	if len(id) != 15 { // 20060102-150405 = 8+1+6 = 15
-		t.Errorf("id length = %d, want 15: %s", len(id), id)
+	// 20060102-150405-xxxxxx = 15 + 1 + 6 = 22
+	if len(id) != 22 {
+		t.Errorf("id length = %d, want 22: %s", len(id), id)
+	}
+	// 两次调用应不同（随机后缀）
+	id2 := GenerateID()
+	if id == id2 {
+		t.Error("two GenerateID calls should differ")
 	}
 }

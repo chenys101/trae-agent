@@ -33,15 +33,15 @@ func NewContextManager(opts ...ContextOption) *ContextManager {
 
 // EstimateTokens 粗略估算 messages 的 token 数。
 // 经验值：1 token ≈ 4 字符（英文），中文约 1 token/字。
-// 这里用字符数 / 3 作为近似（偏保守，倾向早 compact）。
+// 这里用字符数 * 10 / 32 作为近似（偏保守，倾向早 compact）。
+// 用 *10/32 而非 /3 避免短消息整数除法归零。
 func EstimateTokens(messages []llm.Message) int {
 	total := 0
 	for _, m := range messages {
-		// role + content + tool calls
-		total += len(m.Content) / 3
+		total += len(m.Content) * 10 / 32
 		for _, tc := range m.ToolCalls {
-			total += len(tc.Name) / 3
-			total += len(tc.Args) / 3
+			total += len(tc.Name) * 10 / 32
+			total += len(tc.Args) * 10 / 32
 		}
 	}
 	// 每条消息固定开销（role 标记等）

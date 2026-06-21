@@ -1,6 +1,8 @@
 package session
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -103,7 +105,9 @@ func (s *Store) Delete(id string) error {
 	return os.Remove(path)
 }
 
-// GenerateID 生成会话 ID（基于时间戳）。
+// GenerateID 生成会话 ID（时间戳 + 随机后缀，避免同秒冲突）。
 func GenerateID() string {
-	return time.Now().Format("20060102-150405")
+	b := make([]byte, 3)
+	_, _ = rand.Read(b)
+	return time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(b)
 }

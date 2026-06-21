@@ -84,6 +84,8 @@ func (c *Compactor) summarize(ctx context.Context, messages []llm.Message) (stri
 		switch e := ev.(type) {
 		case llm.TextDelta:
 			result.WriteString(e.Content)
+		case llm.Done:
+			// 摘要完成，继续等 channel 关闭
 		case llm.Error:
 			return "", e.Err
 		}

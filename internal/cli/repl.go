@@ -156,8 +156,12 @@ func (r *REPL) runAgent(ctx context.Context, userInput string, interrupter *Inte
 
 // doCompact 执行 compact，更新 r.messages。
 func (r *REPL) doCompact() (beforeTokens, afterTokens int, err error) {
+	ctx := r.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	beforeTokens = agent.EstimateTokens(r.messages)
-	newMsgs, err := r.compactor.Compact(r.ctx, r.messages)
+	newMsgs, err := r.compactor.Compact(ctx, r.messages)
 	if err != nil {
 		return beforeTokens, beforeTokens, err
 	}
@@ -177,7 +181,9 @@ func (r *REPL) saveSession() {
 		Usage:    r.totalUsage,
 	}
 	if err := r.store.Save(sess); err != nil {
-		r.println("warning: failed to save session: " + err.Error())
+		if r.rl != nil {
+			r.println("warning: failed to save session: " + err.Error())
+		}
 	}
 }
 
