@@ -64,8 +64,13 @@ func buildAgent(cfg config.Config, providerFlag, modelFlag string) (*agent.Agent
 	}
 	baseRegistry := tool.NewRegistry(baseTools...)
 
-	// 子 agent runner 复用主 agent 的 provider 和 baseRegistry
-	subagentRunner := agent.NewSubagentRunner(llmProvider, baseRegistry, modelFlag)
+	// 子 agent runner 复用主 agent 的 provider 和 baseRegistry。
+	// model 用 provCfg.DefaultModel 兜底，避免 modelFlag 为空时子 agent API 调用失败。
+	subagentModel := modelFlag
+	if subagentModel == "" {
+		subagentModel = provCfg.DefaultModel
+	}
+	subagentRunner := agent.NewSubagentRunner(llmProvider, baseRegistry, subagentModel)
 
 	// 最终 registry 在基础工具之上加入 Task 工具
 	fullRegistry := tool.NewRegistry(append(baseTools, tool.NewTask(subagentRunner))...)

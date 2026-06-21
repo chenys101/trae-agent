@@ -51,7 +51,10 @@ func TestE2E_subagent_parallelExecution(t *testing.T) {
 	}
 	baseRegistry := tool.NewRegistry(baseTools...)
 	subagentRunner := NewSubagentRunner(subProvider, baseRegistry, "test-model")
-	fullRegistry := tool.NewRegistry(append(baseTools, tool.NewTask(subagentRunner))...)
+	// 用 copy 避免 append 修改 baseTools 底层数组
+	fullTools := make([]tool.Tool, len(baseTools))
+	copy(fullTools, baseTools)
+	fullRegistry := tool.NewRegistry(append(fullTools, tool.NewTask(subagentRunner))...)
 
 	mainAgent := New(mainProvider, fullRegistry, WithModel("test-model"))
 
@@ -112,7 +115,9 @@ func TestE2E_subagent_contextIsolation(t *testing.T) {
 	}
 	baseRegistry := tool.NewRegistry(baseTools...)
 	subagentRunner := NewSubagentRunner(subProvider, baseRegistry, "test-model")
-	fullRegistry := tool.NewRegistry(append(baseTools, tool.NewTask(subagentRunner))...)
+	fullTools := make([]tool.Tool, len(baseTools))
+	copy(fullTools, baseTools)
+	fullRegistry := tool.NewRegistry(append(fullTools, tool.NewTask(subagentRunner))...)
 
 	mainAgent := New(mainProvider, fullRegistry, WithModel("test-model"))
 
@@ -171,7 +176,9 @@ func TestE2E_subagent_failureDoesNotCrashMain(t *testing.T) {
 	baseTools := []tool.Tool{&mockTool{name: "read"}}
 	baseRegistry := tool.NewRegistry(baseTools...)
 	subagentRunner := NewSubagentRunner(subProvider, baseRegistry, "test-model")
-	fullRegistry := tool.NewRegistry(append(baseTools, tool.NewTask(subagentRunner))...)
+	fullTools := make([]tool.Tool, len(baseTools))
+	copy(fullTools, baseTools)
+	fullRegistry := tool.NewRegistry(append(fullTools, tool.NewTask(subagentRunner))...)
 
 	mainAgent := New(mainProvider, fullRegistry, WithModel("test-model"))
 

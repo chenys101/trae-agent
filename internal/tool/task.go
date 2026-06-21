@@ -30,6 +30,9 @@ func (Task) Description() string {
 		"Each sub-agent has its own context window and restricted tool set."
 }
 
+// Schema 返回 Task 工具的 JSON Schema。
+// 注意：enum 中的子 agent 类型与 agent.subagentTypes 保持同步。
+// 此处不能 import agent 包（循环依赖），新增子 agent 类型时需手动同步。
 func (Task) Schema() json.RawMessage {
 	return json.RawMessage(`{
   "type": "object",
@@ -72,6 +75,10 @@ func (t *Task) Run(ctx context.Context, args json.RawMessage) Result {
 
 	result, err := t.runner.RunSubagent(ctx, a.SubagentType, a.Description, a.Prompt)
 	if err != nil {
+		// 子 agent 失败但已产出部分文本时，返回文本 + 警告，而非丢弃
+		if result != "" {
+			return Result{Content: result + "\n\n[warning: subagent ended with error: " + err.Error() + "]"}
+		}
 		return ErrorResult("subagent %s failed: %v", a.SubagentType, err)
 	}
 	return Result{Content: result}

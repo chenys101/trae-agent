@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/bytedance/trae-agent/internal/llm"
 	"github.com/bytedance/trae-agent/internal/tool"
@@ -35,12 +37,15 @@ func GetSubagentType(name string) (SubagentType, bool) {
 	return st, ok
 }
 
-// ListSubagentTypes 返回所有内置子 agent 类型。
+// ListSubagentTypes 返回所有内置子 agent 类型，按 Name 排序保证顺序确定。
 func ListSubagentTypes() []SubagentType {
 	out := make([]SubagentType, 0, len(subagentTypes))
 	for _, st := range subagentTypes {
 		out = append(out, st)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Name < out[j].Name
+	})
 	return out
 }
 
@@ -82,9 +87,10 @@ func NewSubagentRunner(provider llm.Provider, fullRegistry *tool.Registry, model
 	}
 }
 
-// Run 执行子 agent 任务，返回最终文本结果。
+// Run 执行子 agent 任务，返回最终文本结果和可能的 error。
 // 子 agent 有独立的消息历史，不污染主 agent。
 // 子 agent 的 maxSteps 限制为 10（避免无限循环）。
+// 即使出错也可能返回已收集的部分文本，调用方可酌情使用。
 func (r *SubagentRunner) Run(ctx context.Context, st SubagentType, prompt string) (string, error) {
 	if _, ok := GetSubagentType(st.Name); !ok {
 		return "", fmt.Errorf("unknown subagent type: %s", st.Name)
@@ -95,7 +101,7 @@ func (r *SubagentRunner) Run(ctx context.Context, st SubagentType, prompt string
 	subAgent := New(r.provider, restrictedReg,
 		WithMaxSteps(10),
 		WithModel(r.model),
-		WithSystemPrompt(subagentSystemPrompt(st)),
+		WithSystemPrompt(subagentSystemPrompt(st, restrictedReg)),
 	)
 
 	messages := []llm.Message{
@@ -105,8 +111,15 @@ func (r *SubagentRunner) Run(ctx context.Context, st SubagentType, prompt string
 	events := make(chan Event, 64)
 	var resultText string
 
+	// 用 goroutine 跑 agent，主 goroutine 收集事件。
+	// 用 buffered done channel + recover 保证即使 agent panic 也不会死锁。
 	done := make(chan error, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				done <- fmt.Errorf("subagent panic: %v", r)
+			}
+		}()
 		done <- subAgent.RunWithHistory(ctx, &messages, events)
 	}()
 
@@ -116,13 +129,9 @@ func (r *SubagentRunner) Run(ctx context.Context, st SubagentType, prompt string
 		}
 	}
 
-	if err := <-done; err != nil {
-		if resultText != "" {
-			return resultText, nil
-		}
-		return "", err
-	}
-	return resultText, nil
+	// events channel 已关闭（RunWithHistory 的 defer close），等待 done
+	err := <-done
+	return resultText, err
 }
 
 // RunSubagent 实现 tool.TaskRunner 接口，供 Task 工具调用。
@@ -135,11 +144,19 @@ func (r *SubagentRunner) RunSubagent(ctx context.Context, subagentType, descript
 	return r.Run(ctx, st, prompt)
 }
 
-// subagentSystemPrompt 为子 agent 生成系统提示词。
-func subagentSystemPrompt(st SubagentType) string {
-	return fmt.Sprintf(`You are a %s sub-agent. You operate with a restricted tool set and must complete the assigned task autonomously.
+// subagentSystemPrompt 为子 agent 生成系统提示词，包含其角色描述和可用工具列表。
+func subagentSystemPrompt(st SubagentType, reg *tool.Registry) string {
+	var toolList []string
+	for _, t := range reg.List() {
+		toolList = append(toolList, t.Name())
+	}
+	return fmt.Sprintf(`You are a %s sub-agent. %s
+
+You operate with a restricted tool set and must complete the assigned task autonomously.
+
+Available tools: %s
 
 When you are done, provide a concise summary of your findings or actions as your final text response. This summary will be returned to the parent agent.
 
-Do not ask for user input. Do not reference tools you do not have access to.`, st.Name)
+Do not ask for user input. Do not reference tools you do not have access to.`, st.Name, st.Description, strings.Join(toolList, ", "))
 }
