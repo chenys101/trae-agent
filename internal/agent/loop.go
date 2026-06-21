@@ -66,6 +66,16 @@ func (ToolCallEvent) isAgentEvent()   {}
 func (ToolResultEvent) isAgentEvent() {}
 func (DoneEvent) isAgentEvent()       {}
 
+// Provider 返回 agent 使用的 provider（供 Compactor 复用）。
+func (a *Agent) Provider() llm.Provider {
+	return a.provider
+}
+
+// Model 返回 agent 使用的 model。
+func (a *Agent) Model() string {
+	return a.model
+}
+
 // Run 执行 agent 循环（单轮，无历史保留）。
 func (a *Agent) Run(ctx context.Context, userInput string, events chan<- Event) error {
 	messages := []llm.Message{

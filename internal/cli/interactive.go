@@ -62,8 +62,11 @@ func NewInteractiveCmd() *cobra.Command {
 			}
 			a := agent.New(llmProvider, registry, agent.WithMaxSteps(maxSteps), agent.WithModel(modelFlag))
 
-			repl := NewREPL(a)
-			return repl.Run(cmd.Context())
+		repl, err := NewREPL(a)
+		if err != nil {
+			return err
+		}
+		return repl.Run(cmd.Context())
 		},
 	}
 	cmd.Flags().StringVar(&providerFlag, "provider", "", "LLM provider (anthropic/openai)")

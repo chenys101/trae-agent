@@ -124,4 +124,19 @@ func (r *CommandRegistry) registerBuiltin() {
 			return CommandResult{Message: "current model: (from config or --model flag)"}
 		},
 	})
+	r.Register(&Command{
+		Name:        "/compact",
+		Description: "Manually compact conversation history",
+		Usage:       "/compact",
+		Handler: func(repl *REPL, args []string) CommandResult {
+			if len(repl.messages) == 0 {
+				return CommandResult{Message: "no messages to compact"}
+			}
+			before, after, err := repl.doCompact()
+			if err != nil {
+				return CommandResult{Message: fmt.Sprintf("compact failed: %v", err)}
+			}
+			return CommandResult{Message: fmt.Sprintf("compacted: %d → %d tokens (%d messages)", before, after, len(repl.messages))}
+		},
+	})
 }
