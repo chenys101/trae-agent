@@ -13,6 +13,9 @@ type Result struct {
 	Meta    map[string]any // 元信息（行号、文件路径等，可选）
 }
 
+// maxFileSize 文件读写大小上限（10MB），超过拒绝以避免 OOM。
+const maxFileSize = 10 << 20
+
 // Tool 工具接口。
 type Tool interface {
 	Name() string

@@ -4,9 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
+	"syscall"
 	"time"
 )
+
+// maxBashOutput bash 输出上限（1MB），超过截断并附加提示。
+const maxBashOutput = 1 << 20
 
 type Bash struct {
 	defaultTimeout time.Duration
@@ -60,12 +65,28 @@ func (b *Bash) Run(ctx context.Context, args json.RawMessage) Result {
 	if a.Workdir != "" {
 		cmd.Dir = a.Workdir
 	}
+	// 设置独立进程组，cancel 时 kill 整个进程组，
+	// 避免 bash 派生的子进程（如 `sleep 100 &`）在父进程退出后仍存活
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// context 取消时杀整个进程组（负 PID 表示进程组）
+	cmd.Cancel = func() error {
+		if cmd.Process != nil {
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+		return os.ErrProcessDone
+	}
+
+	// 用 LimitWriter 限制输出大小，避免 `yes` / `cat /dev/zero` 等命令导致 OOM
 	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
+	limited := &limitedWriter{w: &buf, max: maxBashOutput}
+	cmd.Stdout = limited
+	cmd.Stderr = limited
 
 	err := cmd.Run()
 	output := buf.String()
+	if limited.truncated && output != "" {
+		output += "\n...[output truncated at 1MB]"
+	}
 	if err != nil {
 		if ctx.Err() != nil {
 			return ErrorResult("cancelled: %v\n%s", ctx.Err(), output)
@@ -74,3 +95,36 @@ func (b *Bash) Run(ctx context.Context, args json.RawMessage) Result {
 	}
 	return Result{Content: output}
 }
+
+// limitedWriter 包装一个 Writer，写入超过 max 字节后丢弃后续写入并标记 truncated。
+type limitedWriter struct {
+	w         *bytes.Buffer
+	max       int
+	written   int
+	truncated bool
+}
+
+func (l *limitedWriter) Write(p []byte) (int, error) {
+	if l.truncated {
+		return len(p), nil
+	}
+	remaining := l.max - l.written
+	if remaining <= 0 {
+		l.truncated = true
+		return len(p), nil
+	}
+	if len(p) > remaining {
+		n, _ := l.w.Write(p[:remaining])
+		l.written += n
+		l.truncated = true
+		return len(p), nil
+	}
+	n, err := l.w.Write(p)
+	l.written += n
+	return n, err
+}
+
+// 确保 limitedWriter 实现 io.Writer 接口（编译期检查）
+var _ interface {
+	Write([]byte) (int, error)
+} = (*limitedWriter)(nil)

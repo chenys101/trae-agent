@@ -33,7 +33,8 @@ func NewStore() (*Store, error) {
 		return nil, fmt.Errorf("get home dir: %w", err)
 	}
 	dir := filepath.Join(home, ".trae", "sessions")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// 会话内容可能含敏感信息（prompt、粘贴的代码/密钥），权限收紧为 0700
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create sessions dir: %w", err)
 	}
 	return &Store{dir: dir}, nil
@@ -41,14 +42,17 @@ func NewStore() (*Store, error) {
 
 // NewStoreWithDir 用指定目录构造（测试用）。
 func NewStoreWithDir(dir string) (*Store, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
 	return &Store{dir: dir}, nil
 }
 
-// Save 保存会话。
+// Save 保存会话。原子写入：先写临时文件再 rename，避免并发或中断损坏文件。
 func (s *Store) Save(sess *Session) error {
+	if sess.ID == "" {
+		return fmt.Errorf("session ID is required")
+	}
 	if sess.CreatedAt.IsZero() {
 		sess.CreatedAt = time.Now()
 	}
@@ -58,7 +62,15 @@ func (s *Store) Save(sess *Session) error {
 		return err
 	}
 	path := filepath.Join(s.dir, sess.ID+".json")
-	return os.WriteFile(path, data, 0o644)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return fmt.Errorf("write tmp file: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("rename tmp file: %w", err)
+	}
+	return nil
 }
 
 // Load 加载会话。
@@ -106,8 +118,15 @@ func (s *Store) Delete(id string) error {
 }
 
 // GenerateID 生成会话 ID（时间戳 + 随机后缀，避免同秒冲突）。
+// 随机后缀 6 字节（48 bit），同秒内生日攻击碰撞阈值约 16M 次生成。
 func GenerateID() string {
-	b := make([]byte, 3)
-	_, _ = rand.Read(b)
+	b := make([]byte, 6)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand 失败极少见，但若发生不能让 b 全零导致 ID 碰撞。
+		// 回退到时间戳的纳秒部分作为弱随机源。
+		for i := range b {
+			b[i] = byte(time.Now().UnixNano() >> (i * 8))
+		}
+	}
 	return time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(b)
 }

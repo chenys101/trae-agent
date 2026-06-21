@@ -42,6 +42,18 @@ func (Read) Run(ctx context.Context, args json.RawMessage) Result {
 		return ErrorResult("file_path is required")
 	}
 
+	// 先 stat 检查文件大小，避免读取超大文件导致 OOM
+	info, err := os.Stat(a.FilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ErrorResult("file not found: %s", a.FilePath)
+		}
+		return ErrorResult("stat file: %v", err)
+	}
+	if info.Size() > maxFileSize {
+		return ErrorResult("file too large (%d bytes, max %d): %s", info.Size(), maxFileSize, a.FilePath)
+	}
+
 	data, err := os.ReadFile(a.FilePath)
 	if err != nil {
 		return ErrorResult("read file: %v", err)
@@ -50,7 +62,9 @@ func (Read) Run(ctx context.Context, args json.RawMessage) Result {
 		return Result{Content: ""}
 	}
 
-	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	// 用 TrimSuffix 而非 TrimRight：只移除一个尾部换行符，保留文件末尾的空行。
+	// TrimRight 会吞掉所有尾部 \n，"a\n\n" 会被压缩为 ["a"]，丢失末尾空行。
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
 	start := 1
 	if a.Offset > 0 {
 		start = a.Offset

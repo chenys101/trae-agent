@@ -115,13 +115,51 @@ func TestStore_List_empty(t *testing.T) {
 
 func TestGenerateID(t *testing.T) {
 	id := GenerateID()
-	// 20060102-150405-xxxxxx = 15 + 1 + 6 = 22
-	if len(id) != 22 {
-		t.Errorf("id length = %d, want 22: %s", len(id), id)
+	// 20060102-150405-xxxxxxxxxxxx = 15 + 1 + 12 = 28
+	if len(id) != 28 {
+		t.Errorf("id length = %d, want 28: %s", len(id), id)
 	}
 	// 两次调用应不同（随机后缀）
 	id2 := GenerateID()
 	if id == id2 {
 		t.Error("two GenerateID calls should differ")
+	}
+	// 批量生成 1000 个，验证无碰撞（6 字节随机，碰撞概率极低）
+	seen := make(map[string]bool, 1000)
+	for i := 0; i < 1000; i++ {
+		gid := GenerateID()
+		if seen[gid] {
+			t.Fatalf("collision detected: %s", gid)
+		}
+		seen[gid] = true
+	}
+}
+
+// TestStore_Save_emptyID 验证空 ID 被拒绝，避免写入 .json 隐藏文件。
+func TestStore_Save_emptyID(t *testing.T) {
+	tmp := t.TempDir()
+	store, _ := NewStoreWithDir(tmp)
+	err := store.Save(&Session{ID: ""})
+	if err == nil {
+		t.Error("expected error for empty session ID")
+	}
+}
+
+// TestStore_Save_atomic 验证 Save 是原子写入：
+// 写入后文件存在且可读，无残留 .tmp 文件。
+func TestStore_Save_atomic(t *testing.T) {
+	tmp := t.TempDir()
+	store, _ := NewStoreWithDir(tmp)
+	sess := &Session{ID: "atomic-test", Messages: []llm.Message{{Role: llm.RoleUser, Content: "data"}}}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	// 主文件应存在
+	if _, err := os.Stat(filepath.Join(tmp, "atomic-test.json")); err != nil {
+		t.Errorf("main file missing: %v", err)
+	}
+	// 不应有残留 .tmp 文件
+	if _, err := os.Stat(filepath.Join(tmp, "atomic-test.json.tmp")); !os.IsNotExist(err) {
+		t.Errorf("tmp file should not exist after atomic save: %v", err)
 	}
 }

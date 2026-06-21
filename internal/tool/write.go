@@ -38,12 +38,16 @@ func (Write) Run(ctx context.Context, args json.RawMessage) Result {
 	if a.FilePath == "" {
 		return ErrorResult("file_path is required")
 	}
+	if len(a.Content) > maxFileSize {
+		return ErrorResult("content too large (%d bytes, max %d)", len(a.Content), maxFileSize)
+	}
 
 	dir := filepath.Dir(a.FilePath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return ErrorResult("mkdir: %v", err)
 	}
-	if err := os.WriteFile(a.FilePath, []byte(a.Content), 0o644); err != nil {
+	// 原子写：先写临时文件再 rename，避免写入中途崩溃导致文件损坏
+	if err := atomicWrite(a.FilePath, []byte(a.Content)); err != nil {
 		return ErrorResult("write file: %v", err)
 	}
 	return Result{Content: "wrote " + a.FilePath}
