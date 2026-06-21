@@ -40,7 +40,15 @@ func (c *Compactor) Compact(ctx context.Context, messages []llm.Message) ([]llm.
 
 	summary, err := c.summarize(ctx, toSummarize)
 	if err != nil {
-		return nil, fmt.Errorf("compact: %w", err)
+		// 降级：直接截断，保留 recent，丢弃 toSummarize，避免失败风暴
+		result := make([]llm.Message, 0, len(recent)+2)
+		result = append(result, llm.Message{
+			Role:    llm.RoleUser,
+			Content: "[Previous conversation truncated due to compaction failure]",
+		})
+		result = append(result, llm.Message{Role: llm.RoleAssistant, Content: "Understood."})
+		result = append(result, recent...)
+		return result, nil
 	}
 
 	// 构造新历史：摘要消息 + 保留的最近消息
@@ -107,6 +115,11 @@ func (c *Compactor) summarize(ctx context.Context, messages []llm.Message) (stri
 
 	var result strings.Builder
 	for ev := range ch {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		default:
+		}
 		switch e := ev.(type) {
 		case llm.TextDelta:
 			result.WriteString(e.Content)

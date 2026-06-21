@@ -52,18 +52,22 @@ func (Grep) Run(ctx context.Context, args json.RawMessage) Result {
 	}
 
 	var b strings.Builder
-	filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+	err = filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // 跳过无法访问的路径（权限等）
 		}
-		if info.IsDir() {
+		// 跳过非普通文件（目录、设备、管道、socket 等），避免读取异常。
+		if !info.Mode().IsRegular() {
 			return nil
 		}
 		f, err := os.Open(p)
 		if err != nil {
 			return nil
 		}
+		defer f.Close()
 		scanner := bufio.NewScanner(f)
+		// 增大 buffer，避免长行被 scanner 默认 64KB 上限丢弃。
+		scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
 		lineNum := 0
 		for scanner.Scan() {
 			lineNum++
@@ -71,8 +75,13 @@ func (Grep) Run(ctx context.Context, args json.RawMessage) Result {
 				fmt.Fprintf(&b, "%s:%d:%s\n", p, lineNum, scanner.Text())
 			}
 		}
-		f.Close()
+		if err := scanner.Err(); err != nil {
+			return err
+		}
 		return nil
 	})
+	if err != nil {
+		return ErrorResult("walk: %v", err)
+	}
 	return Result{Content: b.String()}
 }

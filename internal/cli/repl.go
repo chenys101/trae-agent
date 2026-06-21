@@ -107,6 +107,7 @@ func (r *REPL) runAgent(ctx context.Context, userInput string, interrupter *Inte
 	stopListener := interrupter.StartAgentSignalListener()
 	defer stopListener()
 	defer interrupter.SetCancel(nil)
+	defer cancel() // 避免 context 泄漏
 
 	// 先暂存消息，agent 成功后才提交到 r.messages
 	pendingMessages := make([]llm.Message, len(r.messages))

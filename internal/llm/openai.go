@@ -129,15 +129,16 @@ func (o *OpenAI) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+o.apiKey)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("http request: %w", err)
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
-		errBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("openai api error (status %d): %s", resp.StatusCode, errBody)
+		// 限制读取 4KB，避免错误响应体过大或为二进制时污染日志/错误信息。
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4*1024))
+		return nil, fmt.Errorf("openai api error (status %d): %s", resp.StatusCode, strings.TrimSpace(string(errBody)))
 	}
 
 	ch := make(chan StreamEvent, 16)
@@ -150,7 +151,8 @@ func (o *OpenAI) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- Stre
 	defer close(ch)
 
 	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	// 上限 10MB，避免大 tool_call 参数（如长文件内容）被截断导致 JSON 不完整。
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	var inputTokens, outputTokens int
 	var stopReason string
 	toolAccums := map[int]*toolCallAccum{}

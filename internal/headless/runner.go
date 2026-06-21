@@ -16,17 +16,30 @@ func Run(ctx context.Context, provider llm.Provider, req llm.Request, out io.Wri
 	}
 
 	var usage llm.Usage
-	for event := range ch {
-		switch e := event.(type) {
-		case llm.TextDelta:
-			if _, err := io.WriteString(out, e.Content); err != nil {
-				return usage, fmt.Errorf("write output: %w", err)
+	var gotDone bool
+	for {
+		select {
+		case event, ok := <-ch:
+			if !ok {
+				// channel 关闭但未收到 Done/Error，视为异常
+				if !gotDone {
+					return usage, fmt.Errorf("stream ended without Done")
+				}
+				return usage, nil
 			}
-		case llm.Done:
-			usage = e.Usage
-		case llm.Error:
-			return usage, e.Err
+			switch e := event.(type) {
+			case llm.TextDelta:
+				if _, err := io.WriteString(out, e.Content); err != nil {
+					return usage, fmt.Errorf("write output: %w", err)
+				}
+			case llm.Done:
+				usage = e.Usage
+				gotDone = true
+			case llm.Error:
+				return usage, e.Err
+			}
+		case <-ctx.Done():
+			return usage, ctx.Err()
 		}
 	}
-	return usage, nil
 }

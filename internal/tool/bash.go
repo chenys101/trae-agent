@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -82,6 +83,10 @@ func (b *Bash) Run(ctx context.Context, args json.RawMessage) Result {
 	cmd.Stdout = limited
 	cmd.Stderr = limited
 
+	// 构造白名单环境，过滤掉含 KEY/SECRET/TOKEN/PASSWORD 的敏感变量，
+	// 避免通过环境变量向子进程泄漏密钥。
+	cmd.Env = filterEnv(os.Environ())
+
 	err := cmd.Run()
 	output := buf.String()
 	if limited.truncated && output != "" {
@@ -128,3 +133,22 @@ func (l *limitedWriter) Write(p []byte) (int, error) {
 var _ interface {
 	Write([]byte) (int, error)
 } = (*limitedWriter)(nil)
+
+// filterEnv 过滤环境变量，剔除名称中含 KEY/SECRET/TOKEN/PASSWORD 的敏感变量，
+// 避免通过子进程环境泄漏密钥。
+func filterEnv(env []string) []string {
+	var out []string
+	for _, e := range env {
+		idx := strings.Index(e, "=")
+		if idx < 0 {
+			continue
+		}
+		key := strings.ToUpper(e[:idx])
+		if strings.Contains(key, "KEY") || strings.Contains(key, "SECRET") ||
+			strings.Contains(key, "TOKEN") || strings.Contains(key, "PASSWORD") {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}

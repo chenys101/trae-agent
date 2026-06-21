@@ -86,8 +86,13 @@ func (a *Agent) Run(ctx context.Context, userInput string, events chan<- Event) 
 
 // RunWithHistory 用已有消息历史执行 agent 循环。
 // messages 是指针，agent 会追加 assistant 和 tool 消息。
+// 注意：失败后 messages 状态不可信（可能已追加部分 assistant/tool 消息），
+// 调用方应丢弃 messages，不要基于失败后的状态继续复用。
 func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, events chan<- Event) error {
 	defer close(events)
+
+	// usage 提到循环外，让 maxSteps 路径能访问到最后一次的 usage
+	var usage llm.Usage
 
 	for step := 0; step < a.maxSteps; step++ {
 		req := llm.Request{
@@ -106,7 +111,6 @@ func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, eve
 		// 按 ID 累积流式 tool_call delta，避免多 delta 到达时产生重复/截断
 		toolAccums := map[string]*llm.ToolCall{}
 		var toolOrder []string // 保持首次出现顺序
-		var usage llm.Usage
 
 		for ev := range ch {
 			switch e := ev.(type) {
@@ -137,6 +141,9 @@ func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, eve
 				}
 			case llm.Done:
 				usage = e.Usage
+				if e.StopReason == "max_tokens" || e.StopReason == "length" {
+					return fmt.Errorf("step %d truncated (stop_reason=%s), increase max_tokens", step, e.StopReason)
+				}
 			case llm.Error:
 				return e.Err
 			}
@@ -167,6 +174,9 @@ func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, eve
 			calls[i] = tool.Call{Name: tc.Name, Args: []byte(tc.Args)}
 		}
 		results := a.dispatcher.Dispatch(ctx, calls)
+		if len(results) != len(toolCalls) {
+			return fmt.Errorf("step %d: dispatcher returned %d results for %d calls", step, len(results), len(toolCalls))
+		}
 		for i, r := range results {
 			select {
 			case events <- ToolResultEvent{Name: r.Name, Result: r.Result}:
@@ -183,5 +193,10 @@ func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, eve
 		}
 	}
 
+	// maxSteps 超出：发送 DoneEvent 让 renderer 能拿到 usage，再返回 error
+	select {
+	case events <- DoneEvent{Usage: usage}:
+	case <-ctx.Done():
+	}
 	return fmt.Errorf("max steps (%d) exceeded", a.maxSteps)
 }

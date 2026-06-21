@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bytedance/trae-agent/internal/llm"
 	"github.com/bytedance/trae-agent/internal/session"
 	"github.com/chzyer/readline"
 )
@@ -88,8 +89,13 @@ func (r *CommandRegistry) registerBuiltin() {
 		Description: "Clear conversation history",
 		Usage:       "/clear",
 		Handler: func(repl *REPL, args []string) CommandResult {
+			if len(repl.messages) > 0 {
+				repl.saveSession()
+			}
 			repl.messages = nil
-			return CommandResult{Message: "conversation cleared"}
+			repl.totalUsage = llm.Usage{}
+			repl.sessionID = session.GenerateID()
+			return CommandResult{Message: "conversation cleared (previous session saved)"}
 		},
 	})
 	r.Register(&Command{
@@ -120,9 +126,9 @@ func (r *CommandRegistry) registerBuiltin() {
 		Usage:       "/model",
 		Handler: func(repl *REPL, args []string) CommandResult {
 			if len(args) > 0 {
-				return CommandResult{Message: "error: model switching not supported in M3, use --model flag at startup"}
+				return CommandResult{Message: "error: model switching not supported, use --model flag at startup"}
 			}
-			return CommandResult{Message: "current model: (from config or --model flag)"}
+			return CommandResult{Message: fmt.Sprintf("current model: %s", repl.agent.Model())}
 		},
 	})
 	r.Register(&Command{
@@ -181,6 +187,10 @@ func (r *CommandRegistry) registerBuiltin() {
 			sess, err := repl.store.Load(args[0])
 			if err != nil {
 				return CommandResult{Message: "load session: " + err.Error()}
+			}
+			// 保存当前会话（若有内容），避免覆盖丢失
+			if len(repl.messages) > 0 {
+				repl.saveSession()
 			}
 			repl.messages = sess.Messages
 			repl.totalUsage = sess.Usage

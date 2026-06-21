@@ -70,7 +70,7 @@ func TestCommand_clear(t *testing.T) {
 	if len(repl.messages) != 0 {
 		t.Error("/clear should empty messages")
 	}
-	if result.Message != "conversation cleared" {
+	if result.Message != "conversation cleared (previous session saved)" {
 		t.Errorf("message = %q", result.Message)
 	}
 }

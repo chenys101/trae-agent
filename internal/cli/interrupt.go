@@ -72,8 +72,14 @@ func (h *InterruptHandler) StartAgentSignalListener() func() {
 				h.cancel()
 				h.cancel = nil
 				h.pressed = true
+				h.mu.Unlock()
+			} else if h.pressed {
+				// agent 运行时第二次 Ctrl+C（cancel 已被调用），强制退出
+				h.mu.Unlock()
+				os.Exit(130)
+			} else {
+				h.mu.Unlock()
 			}
-			h.mu.Unlock()
 		}
 	}()
 	return func() {

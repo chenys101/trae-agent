@@ -73,8 +73,25 @@ func (s *Store) Save(sess *Session) error {
 	return nil
 }
 
+// validateID 校验会话 ID 只含安全字符，防止路径穿越。
+func validateID(id string) error {
+	if id == "" {
+		return fmt.Errorf("session ID is required")
+	}
+	for _, r := range id {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_') {
+			return fmt.Errorf("invalid session ID: %s (only [a-zA-Z0-9_-] allowed)", id)
+		}
+	}
+	return nil
+}
+
 // Load 加载会话。
 func (s *Store) Load(id string) (*Session, error) {
+	if err := validateID(id); err != nil {
+		return nil, err
+	}
 	path := filepath.Join(s.dir, id+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -113,6 +130,9 @@ func (s *Store) List() ([]*Session, error) {
 
 // Delete 删除会话。
 func (s *Store) Delete(id string) error {
+	if err := validateID(id); err != nil {
+		return err
+	}
 	path := filepath.Join(s.dir, id+".json")
 	return os.Remove(path)
 }

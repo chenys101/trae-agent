@@ -45,7 +45,7 @@ func (Glob) Run(ctx context.Context, args json.RawMessage) Result {
 	}
 
 	var matches []string
-	filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+	err := filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // 跳过无法访问的路径（权限等）
 		}
@@ -53,37 +53,54 @@ func (Glob) Run(ctx context.Context, args json.RawMessage) Result {
 			return nil
 		}
 		rel, _ := filepath.Rel(root, p)
-		if matchGlob(a.Pattern, rel) {
+		ok, err := matchGlob(a.Pattern, rel)
+		if err != nil {
+			return err
+		}
+		if ok {
 			matches = append(matches, p)
 		}
 		return nil
 	})
+	if err != nil {
+		return ErrorResult("walk: %v", err)
+	}
 
 	return Result{Content: strings.Join(matches, "\n")}
 }
 
 // matchGlob 支持 ** 通配。
-func matchGlob(pattern, name string) bool {
+func matchGlob(pattern, name string) (bool, error) {
 	parts := strings.Split(pattern, "/")
 	nameParts := strings.Split(name, string(filepath.Separator))
 	return matchSegments(parts, nameParts)
 }
 
-func matchSegments(pat, name []string) bool {
+func matchSegments(pat, name []string) (bool, error) {
 	if len(pat) == 0 {
-		return len(name) == 0
+		return len(name) == 0, nil
 	}
 	if pat[0] == "**" {
 		for i := 0; i <= len(name); i++ {
-			if matchSegments(pat[1:], name[i:]) {
-				return true
+			ok, err := matchSegments(pat[1:], name[i:])
+			if err != nil {
+				return false, err
+			}
+			if ok {
+				return true, nil
 			}
 		}
-		return false
+		return false, nil
 	}
 	if len(name) == 0 {
-		return false
+		return false, nil
 	}
-	ok, _ := filepath.Match(pat[0], name[0])
-	return ok && matchSegments(pat[1:], name[1:])
+	ok, err := filepath.Match(pat[0], name[0])
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, nil
+	}
+	return matchSegments(pat[1:], name[1:])
 }

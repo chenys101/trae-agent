@@ -30,10 +30,24 @@ func NewDispatcher(r *Registry) *Dispatcher {
 func (d *Dispatcher) Dispatch(ctx context.Context, calls []Call) []CallResult {
 	results := make([]CallResult, len(calls))
 	var wg sync.WaitGroup
+	// 用带缓冲 channel 作为 semaphore，限制最多 8 个并发 goroutine，
+	// 避免一次性派生过多 goroutine 导致资源耗尽。
+	sem := make(chan struct{}, 8)
 	for i, c := range calls {
 		wg.Add(1)
+		sem <- struct{}{}
 		go func(idx int, call Call) {
 			defer wg.Done()
+			defer func() { <-sem }()
+			// 捕获单个工具 panic，避免崩溃整个进程。
+			defer func() {
+				if r := recover(); r != nil {
+					results[idx] = CallResult{
+						Name:   call.Name,
+						Result: ErrorResult("tool panic: %v", r),
+					}
+				}
+			}()
 			results[idx] = CallResult{
 				Name:   call.Name,
 				Result: d.execute(ctx, call),

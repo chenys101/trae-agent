@@ -7,10 +7,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 )
+
+// httpClient 为 llm 包共享的 HTTP 客户端。
+// 流式场景需要长连接，故不设置 Client.Timeout；转而在 Transport 层
+// 设置连接/握手/响应头超时，避免请求卡死在建立连接阶段。
+var httpClient = &http.Client{
+	Transport: &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+	},
+}
 
 type Anthropic struct {
 	apiKey       string
@@ -105,15 +120,16 @@ func (a *Anthropic) Stream(ctx context.Context, req Request) (<-chan StreamEvent
 	httpReq.Header.Set("x-api-key", a.apiKey)
 	httpReq.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("http request: %w", err)
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
-		errBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("anthropic api error (status %d): %s", resp.StatusCode, errBody)
+		// 限制读取 4KB，避免错误响应体过大或为二进制时污染日志/错误信息。
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4*1024))
+		return nil, fmt.Errorf("anthropic api error (status %d): %s", resp.StatusCode, strings.TrimSpace(string(errBody)))
 	}
 
 	ch := make(chan StreamEvent, 16)
@@ -126,7 +142,8 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 	defer close(ch)
 
 	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	// 上限 10MB，避免大 tool_call 参数（如长文件内容）被截断导致 JSON 不完整。
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	var inputTokens, outputTokens int
 	var stopReason string
 	toolAccums := map[int]*toolCallAccum{}
@@ -182,7 +199,14 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 					Name string `json:"name"`
 				} `json:"content_block"`
 			}
-			json.Unmarshal([]byte(data), &blk)
+			if err := json.Unmarshal([]byte(data), &blk); err != nil {
+				select {
+				case ch <- Error{Err: fmt.Errorf("anthropic: parse content_block_start: %w", err)}:
+				case <-ctx.Done():
+					return
+				}
+				continue
+			}
 			if blk.ContentBlock.Type == "tool_use" {
 				toolAccums[blk.Index] = &toolCallAccum{
 					ID:   blk.ContentBlock.ID,
@@ -195,7 +219,14 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 				Text        string `json:"text"`
 				PartialJSON string `json:"partial_json"`
 			}
-			json.Unmarshal(evt.Delta, &d)
+			if err := json.Unmarshal(evt.Delta, &d); err != nil {
+				select {
+				case ch <- Error{Err: fmt.Errorf("anthropic: parse content_block_delta: %w", err)}:
+				case <-ctx.Done():
+					return
+				}
+				continue
+			}
 			if d.Type == "text_delta" {
 				select {
 				case ch <- TextDelta{Content: d.Text}:
@@ -214,7 +245,14 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 			var d struct {
 				StopReason string `json:"stop_reason"`
 			}
-			json.Unmarshal(evt.Delta, &d)
+			if err := json.Unmarshal(evt.Delta, &d); err != nil {
+				select {
+				case ch <- Error{Err: fmt.Errorf("anthropic: parse message_delta: %w", err)}:
+				case <-ctx.Done():
+					return
+				}
+				continue
+			}
 			if d.StopReason != "" {
 				stopReason = d.StopReason
 			}
@@ -233,7 +271,14 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 					Message string `json:"message"`
 				} `json:"error"`
 			}
-			json.Unmarshal([]byte(data), &e)
+			if err := json.Unmarshal([]byte(data), &e); err != nil {
+				select {
+				case ch <- Error{Err: fmt.Errorf("anthropic: parse error event: %w", err)}:
+				case <-ctx.Done():
+					return
+				}
+				continue
+			}
 			select {
 			case ch <- Error{Err: fmt.Errorf("anthropic stream error: %s", e.Error.Message)}:
 			case <-ctx.Done():
