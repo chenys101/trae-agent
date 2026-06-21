@@ -47,8 +47,6 @@ func (r *REPL) Run(ctx context.Context) error {
 	r.println(r.renderer.Welcome())
 
 	interrupter := NewInterruptHandler()
-	stopInterrupt := interrupter.Start(ctx)
-	defer stopInterrupt()
 
 	for {
 		line, err := rl.Readline()
@@ -57,6 +55,7 @@ func (r *REPL) Run(ctx context.Context) error {
 			return nil
 		}
 		if err == readline.ErrInterrupt {
+			// readline 捕获了 SIGINT（等待输入时）
 			if interrupter.Handle() {
 				return nil
 			}
@@ -87,9 +86,14 @@ func (r *REPL) Run(ctx context.Context) error {
 func (r *REPL) runAgent(ctx context.Context, userInput string, interrupter *InterruptHandler) {
 	agentCtx, cancel := context.WithCancel(ctx)
 	interrupter.SetCancel(cancel)
+	stopListener := interrupter.StartAgentSignalListener()
+	defer stopListener()
 	defer interrupter.SetCancel(nil)
 
-	r.messages = append(r.messages, llm.Message{
+	// 先暂存消息，agent 成功后才提交到 r.messages
+	pendingMessages := make([]llm.Message, len(r.messages))
+	copy(pendingMessages, r.messages)
+	pendingMessages = append(pendingMessages, llm.Message{
 		Role:    llm.RoleUser,
 		Content: userInput,
 	})
@@ -97,12 +101,14 @@ func (r *REPL) runAgent(ctx context.Context, userInput string, interrupter *Inte
 	events := make(chan agent.Event, 64)
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- r.agent.RunWithHistory(agentCtx, &r.messages, events)
+		errCh <- r.agent.RunWithHistory(agentCtx, &pendingMessages, events)
 	}()
 
-	usage, renderErr := r.renderer.Render(agentCtx, events, r.rl.Stdout())
+	usage, renderErr := r.renderer.Render(events, r.rl.Stdout())
 	if renderErr != nil {
 		r.println("error: " + renderErr.Error())
+		// 等待 goroutine 结束，避免后续对 pendingMessages 的写竞争
+		<-errCh
 		return
 	}
 	if err := <-errCh; err != nil {
@@ -113,6 +119,8 @@ func (r *REPL) runAgent(ctx context.Context, userInput string, interrupter *Inte
 		}
 		return
 	}
+	// agent 成功完成，提交消息历史
+	r.messages = pendingMessages
 	r.totalUsage.InputTokens += usage.InputTokens
 	r.totalUsage.OutputTokens += usage.OutputTokens
 }

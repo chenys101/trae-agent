@@ -21,6 +21,7 @@ func NewInterruptHandler() *InterruptHandler {
 }
 
 // SetCancel 设置当前 agent 运行的 cancel 函数。
+// agent 开始时调 SetCancel(cancel)，结束时调 SetCancel(nil)。
 func (h *InterruptHandler) SetCancel(cancel context.CancelFunc) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -48,28 +49,35 @@ func (h *InterruptHandler) Handle() bool {
 	return false
 }
 
-// Reset 重置 pressed 状态。
+// Reset 重置 pressed 状态（用户开始输入新内容时调）。
 func (h *InterruptHandler) Reset() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.pressed = false
 }
 
-// Start 启动信号监听，返回停止函数。
-func (h *InterruptHandler) Start(ctx context.Context) func() {
+// StartAgentSignalListener 在 agent 运行期间监听 SIGINT，调 cancel 中断 agent。
+// 返回 stop 函数，agent 结束时必须调用。
+// 仅在 agent 运行时启用，避免与 readline 的信号捕获冲突。
+func (h *InterruptHandler) StartAgentSignalListener() func() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT)
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
+		for sig := range sigCh {
+			if sig == nil {
 				return
-			case <-sigCh:
-				h.Handle()
 			}
+			h.mu.Lock()
+			if h.cancel != nil {
+				h.cancel()
+				h.cancel = nil
+				h.pressed = true
+			}
+			h.mu.Unlock()
 		}
 	}()
 	return func() {
 		signal.Stop(sigCh)
+		close(sigCh)
 	}
 }

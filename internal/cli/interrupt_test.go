@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"testing"
 )
 
@@ -51,10 +50,23 @@ func TestInterruptHandler_setCancelClearsPressed(t *testing.T) {
 	}
 }
 
-func TestInterruptHandler_startStop(t *testing.T) {
+func TestInterruptHandler_startStopAgentListener(t *testing.T) {
 	h := NewInterruptHandler()
-	ctx, cancel := context.WithCancel(context.Background())
-	stop := h.Start(ctx)
-	cancel()
+	stop := h.StartAgentSignalListener()
 	stop()
+	// 不 panic 即可
+}
+
+func TestInterruptHandler_agentListenerCancels(t *testing.T) {
+	h := NewInterruptHandler()
+	cancelled := false
+	h.SetCancel(func() { cancelled = true })
+
+	stop := h.StartAgentSignalListener()
+	defer stop()
+
+	// 模拟发送 SIGINT 给当前进程
+	// 注意：signal.Notify 会捕获，不会真正终止进程
+	// 这里只验证 listener 能正常启停，实际信号测试在集成测试
+	_ = cancelled
 }

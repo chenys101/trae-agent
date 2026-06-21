@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/bytedance/trae-agent/internal/llm"
 	"github.com/bytedance/trae-agent/internal/tool"
@@ -161,22 +160,4 @@ func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, eve
 	}
 
 	return fmt.Errorf("max steps (%d) exceeded", a.maxSteps)
-}
-
-// RenderEvents 消费 agent 事件，渲染到 out（简单文本版）。
-func RenderEvents(ctx context.Context, events <-chan Event, out io.Writer) (llm.Usage, error) {
-	var usage llm.Usage
-	for ev := range events {
-		switch e := ev.(type) {
-		case TextEvent:
-			fmt.Fprint(out, e.Content)
-		case ToolCallEvent:
-			fmt.Fprintf(out, "\n[tool: %s %s]\n", e.Name, e.Args)
-		case ToolResultEvent:
-			fmt.Fprintf(out, "[result: %s]\n%s\n", e.Name, e.Result.Content)
-		case DoneEvent:
-			usage = e.Usage
-		}
-	}
-	return usage, nil
 }

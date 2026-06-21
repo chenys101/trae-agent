@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/bytedance/trae-agent/internal/agent"
@@ -17,7 +16,7 @@ func TestRenderer_textEvent(t *testing.T) {
 	close(events)
 
 	var buf bytes.Buffer
-	usage, err := r.Render(context.Background(), events, &buf)
+	usage, err := r.Render(events, &buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +36,7 @@ func TestRenderer_toolCallEvent(t *testing.T) {
 	close(events)
 
 	var buf bytes.Buffer
-	usage, _ := r.Render(context.Background(), events, &buf)
+	usage, _ := r.Render(events, &buf)
 	out := buf.String()
 	if !bytes.Contains([]byte(out), []byte("read")) {
 		t.Errorf("missing tool name: %s", out)
@@ -60,7 +59,7 @@ func TestRenderer_toolResultEvent(t *testing.T) {
 	close(events)
 
 	var buf bytes.Buffer
-	r.Render(context.Background(), events, &buf)
+	r.Render(events, &buf)
 	out := buf.String()
 	if !bytes.Contains([]byte(out), []byte("file content here")) {
 		t.Errorf("missing result content: %s", out)
@@ -77,7 +76,7 @@ func TestRenderer_toolResultError(t *testing.T) {
 	close(events)
 
 	var buf bytes.Buffer
-	r.Render(context.Background(), events, &buf)
+	r.Render(events, &buf)
 	out := buf.String()
 	if !bytes.Contains([]byte(out), []byte("command failed")) {
 		t.Errorf("missing error content: %s", out)
@@ -98,7 +97,7 @@ func TestRenderer_truncation(t *testing.T) {
 	close(events)
 
 	var buf bytes.Buffer
-	r.Render(context.Background(), events, &buf)
+	r.Render(events, &buf)
 	out := buf.String()
 	if !bytes.Contains([]byte(out), []byte("truncated")) {
 		t.Errorf("long content should be truncated: %s", out[:50])

@@ -115,13 +115,13 @@ func (r *CommandRegistry) registerBuiltin() {
 	})
 	r.Register(&Command{
 		Name:        "/model",
-		Description: "Show or set model (usage: /model [name])",
-		Usage:       "/model [model-name]",
+		Description: "Show current model (switching not supported in M3)",
+		Usage:       "/model",
 		Handler: func(repl *REPL, args []string) CommandResult {
-			if len(args) == 0 {
-				return CommandResult{Message: "current model: (from config)"}
+			if len(args) > 0 {
+				return CommandResult{Message: "error: model switching not supported in M3, use --model flag at startup"}
 			}
-			return CommandResult{Message: fmt.Sprintf("model switch not yet supported in M3, requested: %s", args[0])}
+			return CommandResult{Message: "current model: (from config or --model flag)"}
 		},
 	})
 }

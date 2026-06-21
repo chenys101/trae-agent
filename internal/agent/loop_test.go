@@ -51,9 +51,14 @@ func TestAgent_singleTextResponse(t *testing.T) {
 	}()
 
 	var buf bytes.Buffer
-	usage, err := RenderEvents(context.Background(), events, &buf)
-	if err != nil {
-		t.Fatal(err)
+	var usage llm.Usage
+	for ev := range events {
+		switch e := ev.(type) {
+		case TextEvent:
+			buf.WriteString(e.Content)
+		case DoneEvent:
+			usage = e.Usage
+		}
 	}
 	if buf.String() != "hello" {
 		t.Errorf("output = %q, want hello", buf.String())
@@ -87,7 +92,14 @@ func TestAgent_toolCallLoop(t *testing.T) {
 	}()
 
 	var buf bytes.Buffer
-	RenderEvents(context.Background(), events, &buf)
+	for ev := range events {
+		switch e := ev.(type) {
+		case TextEvent:
+			buf.WriteString(e.Content)
+		case ToolCallEvent:
+			buf.WriteString(e.Name)
+		}
+	}
 
 	out := buf.String()
 	if !strings.Contains(out, "echo") {

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"io"
 
@@ -33,7 +32,7 @@ func (r *Renderer) Welcome() string {
 }
 
 // Render 消费 agent 事件流，渲染到 out。返回 token 用量。
-func (r *Renderer) Render(ctx context.Context, events <-chan agent.Event, out io.Writer) (llm.Usage, error) {
+func (r *Renderer) Render(events <-chan agent.Event, out io.Writer) (llm.Usage, error) {
 	var usage llm.Usage
 	for ev := range events {
 		switch e := ev.(type) {
@@ -47,11 +46,11 @@ func (r *Renderer) Render(ctx context.Context, events <-chan agent.Event, out io
 			if len(content) > 500 {
 				content = content[:500] + "... (truncated)"
 			}
-			label := "✓"
 			if e.Result.IsError {
-				label = "✗"
+				fmt.Fprintln(out, r.errorStyle.Render(fmt.Sprintf("✗ %s", content)))
+			} else {
+				fmt.Fprintln(out, r.resultStyle.Render(fmt.Sprintf("✓ %s", content)))
 			}
-			fmt.Fprintln(out, r.resultStyle.Render(fmt.Sprintf("%s %s", label, content)))
 		case agent.DoneEvent:
 			usage = e.Usage
 		}

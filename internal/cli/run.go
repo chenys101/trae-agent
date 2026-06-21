@@ -65,15 +65,16 @@ func NewRunCmd() *cobra.Command {
 		a := agent.New(llmProvider, registry, agent.WithMaxSteps(maxSteps), agent.WithModel(modelFlag))
 
 			events := make(chan agent.Event, 64)
-			errCh := make(chan error, 1)
-			go func() {
-				errCh <- a.Run(cmd.Context(), args[0], events)
-			}()
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- a.Run(cmd.Context(), args[0], events)
+		}()
 
-			usage, renderErr := agent.RenderEvents(cmd.Context(), events, cmd.OutOrStdout())
-			if renderErr != nil {
-				return renderErr
-			}
+		renderer := NewRenderer()
+		usage, renderErr := renderer.Render(events, cmd.OutOrStdout())
+		if renderErr != nil {
+			return renderErr
+		}
 			if err := <-errCh; err != nil {
 				return err
 			}
