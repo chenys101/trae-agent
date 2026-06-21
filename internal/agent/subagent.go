@@ -1,6 +1,10 @@
 package agent
 
 import (
+	"context"
+	"fmt"
+
+	"github.com/bytedance/trae-agent/internal/llm"
 	"github.com/bytedance/trae-agent/internal/tool"
 )
 
@@ -58,4 +62,84 @@ func (st SubagentType) RestrictedRegistry(full *tool.Registry) *tool.Registry {
 		}
 	}
 	return tool.NewRegistry(kept...)
+}
+
+// SubagentRunner 执行子 agent 任务。
+// 子 agent 复用主 agent 的 provider 和工具，但拥有独立的消息历史
+// 和受限的工具集（按 SubagentType 过滤）。
+type SubagentRunner struct {
+	provider llm.Provider
+	registry *tool.Registry
+	model    string
+}
+
+// NewSubagentRunner 构造子 agent 执行器。
+func NewSubagentRunner(provider llm.Provider, fullRegistry *tool.Registry, model string) *SubagentRunner {
+	return &SubagentRunner{
+		provider: provider,
+		registry: fullRegistry,
+		model:    model,
+	}
+}
+
+// Run 执行子 agent 任务，返回最终文本结果。
+// 子 agent 有独立的消息历史，不污染主 agent。
+// 子 agent 的 maxSteps 限制为 10（避免无限循环）。
+func (r *SubagentRunner) Run(ctx context.Context, st SubagentType, prompt string) (string, error) {
+	if _, ok := GetSubagentType(st.Name); !ok {
+		return "", fmt.Errorf("unknown subagent type: %s", st.Name)
+	}
+
+	restrictedReg := st.RestrictedRegistry(r.registry)
+
+	subAgent := New(r.provider, restrictedReg,
+		WithMaxSteps(10),
+		WithModel(r.model),
+		WithSystemPrompt(subagentSystemPrompt(st)),
+	)
+
+	messages := []llm.Message{
+		{Role: llm.RoleUser, Content: prompt},
+	}
+
+	events := make(chan Event, 64)
+	var resultText string
+
+	done := make(chan error, 1)
+	go func() {
+		done <- subAgent.RunWithHistory(ctx, &messages, events)
+	}()
+
+	for ev := range events {
+		if te, ok := ev.(TextEvent); ok {
+			resultText += te.Content
+		}
+	}
+
+	if err := <-done; err != nil {
+		if resultText != "" {
+			return resultText, nil
+		}
+		return "", err
+	}
+	return resultText, nil
+}
+
+// RunSubagent 实现 tool.TaskRunner 接口，供 Task 工具调用。
+// 参数 description 仅用于日志/展示，不传入 LLM。
+func (r *SubagentRunner) RunSubagent(ctx context.Context, subagentType, description, prompt string) (string, error) {
+	st, ok := GetSubagentType(subagentType)
+	if !ok {
+		return "", fmt.Errorf("unknown subagent type: %s", subagentType)
+	}
+	return r.Run(ctx, st, prompt)
+}
+
+// subagentSystemPrompt 为子 agent 生成系统提示词。
+func subagentSystemPrompt(st SubagentType) string {
+	return fmt.Sprintf(`You are a %s sub-agent. You operate with a restricted tool set and must complete the assigned task autonomously.
+
+When you are done, provide a concise summary of your findings or actions as your final text response. This summary will be returned to the parent agent.
+
+Do not ask for user input. Do not reference tools you do not have access to.`, st.Name)
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/trae-agent/internal/llm"
 	"github.com/bytedance/trae-agent/internal/tool"
 )
 
@@ -91,4 +92,114 @@ func toolNames(r *tool.Registry) []string {
 		names = append(names, t.Name())
 	}
 	return names
+}
+
+func TestSubagentRunner_executesAndReturnsText(t *testing.T) {
+	provider := &mockProvider{
+		scripts: [][]llm.StreamEvent{
+			{
+				llm.TextDelta{Content: "subagent result"},
+				llm.Done{},
+			},
+		},
+	}
+	fullRegistry := tool.NewRegistry(&mockTool{name: "read"})
+	st, _ := GetSubagentType("search")
+	runner := NewSubagentRunner(provider, fullRegistry, "test-model")
+
+	result, err := runner.Run(context.Background(), st, "find all TODO comments")
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if result != "subagent result" {
+		t.Errorf("result = %q, want 'subagent result'", result)
+	}
+}
+
+func TestSubagentRunner_toolLoopReturnsFinalText(t *testing.T) {
+	provider := &mockProvider{
+		scripts: [][]llm.StreamEvent{
+			{
+				llm.ToolCallDelta{ID: "tc1", Name: "read", ArgsDelta: `{"file_path":"/tmp/x"}`},
+				llm.Done{Usage: llm.Usage{InputTokens: 5, OutputTokens: 5}},
+			},
+			{
+				llm.TextDelta{Content: "found 2 TODOs"},
+				llm.Done{Usage: llm.Usage{InputTokens: 10, OutputTokens: 5}},
+			},
+		},
+	}
+	fullRegistry := tool.NewRegistry(&mockTool{name: "read"})
+	st, _ := GetSubagentType("search")
+	runner := NewSubagentRunner(provider, fullRegistry, "test-model")
+
+	result, err := runner.Run(context.Background(), st, "find TODOs")
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if result != "found 2 TODOs" {
+		t.Errorf("result = %q, want 'found 2 TODOs'", result)
+	}
+}
+
+func TestSubagentRunner_contextCancel(t *testing.T) {
+	provider := &mockProvider{block: true}
+	fullRegistry := tool.NewRegistry(&mockTool{name: "read"})
+	st, _ := GetSubagentType("search")
+	runner := NewSubagentRunner(provider, fullRegistry, "test-model")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := runner.Run(ctx, st, "test")
+	if err == nil {
+		t.Error("expected error for cancelled context")
+	}
+}
+
+func TestSubagentRunner_unknownType(t *testing.T) {
+	provider := &mockProvider{}
+	fullRegistry := tool.NewRegistry(&mockTool{name: "read"})
+	runner := NewSubagentRunner(provider, fullRegistry, "test-model")
+
+	_, err := runner.Run(context.Background(), SubagentType{Name: "unknown"}, "test")
+	if err == nil {
+		t.Error("expected error for unknown subagent type")
+	}
+}
+
+func TestSubagentRunner_implementsTaskRunner(t *testing.T) {
+	provider := &mockProvider{}
+	fullRegistry := tool.NewRegistry(&mockTool{name: "read"})
+	runner := NewSubagentRunner(provider, fullRegistry, "test-model")
+
+	var _ interface {
+		RunSubagent(ctx context.Context, subagentType, description, prompt string) (string, error)
+	} = runner
+}
+
+func TestSubagentRunner_runSubagent(t *testing.T) {
+	provider := &mockProvider{
+		scripts: [][]llm.StreamEvent{
+			{
+				llm.TextDelta{Content: "task complete"},
+				llm.Done{},
+			},
+		},
+	}
+	fullRegistry := tool.NewRegistry(&mockTool{name: "read"})
+	runner := NewSubagentRunner(provider, fullRegistry, "test-model")
+
+	result, err := runner.RunSubagent(
+		context.Background(),
+		"search",
+		"find TODOs",
+		"find all TODO comments in the codebase",
+	)
+	if err != nil {
+		t.Fatalf("RunSubagent failed: %v", err)
+	}
+	if result != "task complete" {
+		t.Errorf("result = %q, want 'task complete'", result)
+	}
 }
