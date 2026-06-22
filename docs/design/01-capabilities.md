@@ -10,7 +10,7 @@
 | 可中断 | ✅ Ctrl+C / ESC | ✅ | ✅ 必须达到 | P0 |
 | 斜杠命令 | ✅ 丰富 | ✅ | ✅ 必须达到 | P0 |
 | 内置工具 | ✅ read/write/edit/glob/grep/bash | ✅ | ✅ 必须达到 | P0 |
-| TodoWrite | ✅ 内置 | ⚠️ 部分 | ✅ 必须达到 | P0 |
+| TodoWrite | ✅ 内置 | ✅ | ✅ 必须达到 | P0 |
 | 子 agent (Task) | ✅ 并行 | ❌ | ✅ 必须达到 | P1 |
 | 自动 compact | ✅ | ✅ | ✅ 必须达到 | P1 |
 | 会话 resume | ✅ | ✅ | ✅ 必须达到 | P1 |
@@ -72,7 +72,7 @@
 | `Glob` | 文件名 glob 匹配 | 内置 | ✅ |
 | `Grep` | 内容正则搜索（ripgrep 语义） | 内置 | ✅ |
 | `Bash` | 执行 shell 命令，支持超时、后台 | 内置 | ✅ |
-| `TodoWrite` | 任务清单管理 | 内置 | ❌ 规划中 |
+| `TodoWrite` | 任务清单管理 | 内置 | ✅ |
 | `Task` | 派发子 agent（P1） | 内置 | ✅ |
 
 **验收标准**：

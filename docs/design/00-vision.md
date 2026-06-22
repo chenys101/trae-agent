@@ -26,7 +26,7 @@
 | G1 | 单二进制分发 | `go build` 产出一个无外部依赖的可执行文件 |
 | G2 | 流式交互式 REPL | 输出逐 token 流式渲染，`Ctrl+C` 可中断当前步骤 |
 | G3 | 斜杠命令系统 | 内置 `/help` `/clear` `/compact` `/model` `/resume` `/agents` 等 |
-| G4 | 内置工具集 | read / write / edit / glob / grep / bash / task 内置（TodoWrite 规划中） |
+| G4 | 内置工具集 | read / write / edit / glob / grep / bash / task / todo_write 内置 |
 | G5 | 子 agent 委派 | Task 工具可派发独立子 agent 并行执行，结果回汇 |
 | G6 | 多 LLM Provider | OpenAI / Anthropic 已实现；Google / OpenRouter / Ollama 规划中（兼容 OpenAI 协议端点可用） |
 | G7 | 上下文管理 | 自动 compact 长对话、token 预算感知、会话持久化与 resume |

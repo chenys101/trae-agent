@@ -89,6 +89,7 @@ func buildAgent(ctx context.Context, cfg config.Config, providerFlag, modelFlag 
 		tool.NewGlob(),
 		tool.NewGrep(),
 		tool.NewBash(defaultBashTimeout),
+		tool.NewTodo(),
 	}
 	baseTools = append(baseTools, mcpMgr.Tools()...)
 	baseRegistry := tool.NewRegistry(baseTools...)

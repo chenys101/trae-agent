@@ -94,6 +94,7 @@ trae-agent/                      # 仓库根 = Go module 根
 │   │   ├── glob.go
 │   │   ├── grep.go
 │   │   ├── bash.go
+│   │   ├── todo.go              # TodoWrite 工具 (任务清单)
 │   │   └── task.go              # Task 工具 (子 agent 派发)
 │   ├── llm/
 │   │   ├── provider.go          # Provider 接口 + StreamEvent

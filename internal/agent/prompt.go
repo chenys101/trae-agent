@@ -24,4 +24,17 @@ Launch multiple sub-agents in parallel when tasks are independent. Each sub-agen
 Use sub-agents proactively for:
 - Parallelizing independent research queries
 - Cross-layer changes (frontend + backend) that can be planned out
-- Operations producing large output not needed in your main context`, BrandName)
+- Operations producing large output not needed in your main context
+
+## TodoWrite (Task Tracking)
+
+Use the "todo_write" tool to manage a task list for multi-step work. Each call replaces the entire list. Use it to:
+
+- Plan out the steps before starting complex work (3+ distinct steps)
+- Track progress as you complete each step
+- Show the user what's pending and what's done
+
+Guidelines:
+- Only one task should be in_progress at a time
+- Mark tasks completed immediately after finishing them, before starting the next
+- Skip todo_write for simple 1-2 step tasks`, BrandName)
