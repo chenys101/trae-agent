@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bytedance/trae-agent/internal/cost"
 	"github.com/bytedance/trae-agent/internal/llm"
 	"github.com/bytedance/trae-agent/internal/session"
 	"github.com/chzyer/readline"
@@ -122,14 +123,20 @@ func (r *CommandRegistry) registerBuiltin() {
 	})
 	r.Register(&Command{
 		Name:        "/cost",
-		Description: "Show total token usage",
+		Description: "Show total token usage and estimated cost",
 		Usage:       "/cost",
 		Handler: func(repl *REPL, args []string) CommandResult {
-			// /cost 专注 token 用量，会话状态由 /status 提供
-			return CommandResult{Message: fmt.Sprintf(
+			msg := fmt.Sprintf(
 				"total tokens: input=%d output=%d",
 				repl.totalUsage.InputTokens, repl.totalUsage.OutputTokens,
-			)}
+			)
+			if repl.agent != nil {
+				model := repl.agent.Model()
+				if estCost, ok := cost.Estimate(model, repl.totalUsage); ok {
+					msg += fmt.Sprintf(" | estimated cost: %s (model: %s)", cost.FormatCost(estCost), model)
+				}
+			}
+			return CommandResult{Message: msg}
 		},
 	})
 	r.Register(&Command{
@@ -212,4 +219,5 @@ func (r *CommandRegistry) registerBuiltin() {
 		},
 	})
 	r.Register(NewPermissionsCmd())
+	r.Register(NewMCPCmd())
 }

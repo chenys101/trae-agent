@@ -5,8 +5,7 @@ import (
 )
 
 func NewInteractiveCmd() *cobra.Command {
-	var providerFlag string
-	var modelFlag string
+	var providerFlag, modelFlag string
 	cmd := &cobra.Command{
 		Use:   "interactive",
 		Short: "Start interactive REPL session",
@@ -17,12 +16,15 @@ func NewInteractiveCmd() *cobra.Command {
 				return err
 			}
 
-			a, err := buildAgent(cfg, providerFlag, modelFlag)
+			a, policy, permStore, mcpMgr, err := buildAgent(cmd.Context(), cfg, providerFlag, modelFlag)
 			if err != nil {
 				return err
 			}
+			if mcpMgr != nil {
+				defer mcpMgr.Close()
+			}
 
-			repl, err := NewREPL(a)
+			repl, err := NewREPL(a, policy, permStore, mcpMgr)
 			if err != nil {
 				return err
 			}

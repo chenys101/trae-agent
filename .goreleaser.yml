@@ -1,0 +1,41 @@
+version: 2
+
+builds:
+  - id: trae
+    main: ./cmd/trae
+    binary: trae
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/bytedance/trae-agent/internal/cli.Version={{.Version}}
+      - -X github.com/bytedance/trae-agent/internal/cli.Commit={{.ShortCommit}}
+
+archives:
+  - id: default
+    builds:
+      - trae
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+
+release:
+  github:
+    owner: chenys101
+    name: trae-agent
+  draft: true
+  name_template: "v{{.Version}}"
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

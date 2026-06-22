@@ -2,12 +2,15 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/bytedance/trae-agent/internal/agent"
 	"github.com/bytedance/trae-agent/internal/llm"
+	"github.com/bytedance/trae-agent/internal/mcp"
 	"github.com/bytedance/trae-agent/internal/permission"
 	"github.com/bytedance/trae-agent/internal/session"
 	"github.com/chzyer/readline"
@@ -35,21 +38,24 @@ type REPL struct {
 	totalUsage llm.Usage
 	ctxMgr     *agent.ContextManager
 	compactor  Compactor
-	store      SessionStore // Task 5 用，先定义
-	sessionID  string       // Task 5 用，先定义
+	store      SessionStore
+	sessionID  string
 	ctx        context.Context
-	policy     *permission.DefaultPolicy // M6 权限策略
-	permStore  *permission.Store         // M6 权限规则持久化
+	policy     *permission.DefaultPolicy
+	permStore  *permission.Store
+	mcpMgr     *mcp.Manager
+	askMu      sync.Mutex
 }
 
 // NewREPL 构造 REPL 实例。
-func NewREPL(a *agent.Agent) (*REPL, error) {
+// policy/permStore/mcpMgr 可为 nil。构造后覆盖 headless asker 为交互式 asker。
+func NewREPL(a *agent.Agent, policy *permission.DefaultPolicy, permStore *permission.Store, mcpMgr *mcp.Manager) (*REPL, error) {
 	cm := agent.NewContextManager()
 	store, err := session.NewStore()
 	if err != nil {
 		return nil, fmt.Errorf("init session store: %w", err)
 	}
-	return &REPL{
+	r := &REPL{
 		agent:     a,
 		commands:  NewCommandRegistry(),
 		renderer:  NewRenderer(),
@@ -57,7 +63,67 @@ func NewREPL(a *agent.Agent) (*REPL, error) {
 		compactor: agent.NewCompactor(a.Provider(), cm, a.Model()),
 		store:     store,
 		sessionID: session.GenerateID(),
-	}, nil
+		policy:    policy,
+		permStore: permStore,
+		mcpMgr:    mcpMgr,
+	}
+	a.SetAsker(r)
+	return r, nil
+}
+
+// Ask 实现 permission.Asker 接口。
+func (r *REPL) Ask(ctx context.Context, tool, args, reason string) permission.Action {
+	r.askMu.Lock()
+	defer r.askMu.Unlock()
+
+	out := r.rl.Stdout()
+	fmt.Fprintf(out, "\n\033[33m[permission]\033[0m tool=%s\n", tool)
+	fmt.Fprintf(out, "  reason: %s\n", reason)
+	if len(args) > 200 {
+		args = args[:200] + "..."
+	}
+	fmt.Fprintf(out, "  args: %s\n", args)
+	fmt.Fprintf(out, "  allow? [y]es / [n]o / [a]lways-yes / [d]always-no: ")
+
+	oldPrompt := r.rl.Config.Prompt
+	r.rl.SetPrompt("")
+	line, err := r.rl.Readline()
+	r.rl.SetPrompt(oldPrompt)
+	if err != nil {
+		return permission.ActionDeny
+	}
+
+	switch strings.TrimSpace(strings.ToLower(line)) {
+	case "y", "yes":
+		return permission.ActionAllow
+	case "a", "always":
+		r.persistRule(tool, args, permission.ActionAllowAlways)
+		return permission.ActionAllowAlways
+	case "d", "deny":
+		r.persistRule(tool, args, permission.ActionDenyAlways)
+		return permission.ActionDenyAlways
+	default:
+		return permission.ActionDeny
+	}
+}
+
+// persistRule 添加用户规则到内存策略并持久化。
+func (r *REPL) persistRule(tool, args string, action permission.Action) {
+	if r.policy == nil {
+		return
+	}
+	keyArg := permission.ExtractKeyArg(tool, json.RawMessage(args))
+	r.policy.AddUserRule(permission.Rule{
+		Tool:   tool,
+		Args:   []string{keyArg},
+		Action: action,
+		Desc:   fmt.Sprintf("user rule: %s %s", tool, keyArg),
+	})
+	if r.permStore != nil {
+		if err := r.permStore.Save(r.policy); err != nil {
+			r.println("warning: failed to persist permission rule: " + err.Error())
+		}
+	}
 }
 
 // Run 启动 REPL 主循环，阻塞直到用户退出。
