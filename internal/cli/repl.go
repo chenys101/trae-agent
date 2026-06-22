@@ -8,6 +8,7 @@ import (
 
 	"github.com/bytedance/trae-agent/internal/agent"
 	"github.com/bytedance/trae-agent/internal/llm"
+	"github.com/bytedance/trae-agent/internal/permission"
 	"github.com/bytedance/trae-agent/internal/session"
 	"github.com/chzyer/readline"
 )
@@ -37,6 +38,8 @@ type REPL struct {
 	store      SessionStore // Task 5 用，先定义
 	sessionID  string       // Task 5 用，先定义
 	ctx        context.Context
+	policy     *permission.DefaultPolicy // M6 权限策略
+	permStore  *permission.Store         // M6 权限规则持久化
 }
 
 // NewREPL 构造 REPL 实例。

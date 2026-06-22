@@ -211,4 +211,5 @@ func (r *CommandRegistry) registerBuiltin() {
 			return CommandResult{Message: fmt.Sprintf("resumed session %s (%d messages, saved as new session %s)", sess.ID, len(sess.Messages), repl.sessionID)}
 		},
 	})
+	r.Register(NewPermissionsCmd())
 }

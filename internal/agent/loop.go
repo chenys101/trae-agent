@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/bytedance/trae-agent/internal/llm"
+	"github.com/bytedance/trae-agent/internal/permission"
 	"github.com/bytedance/trae-agent/internal/tool"
 )
 
@@ -16,6 +17,8 @@ type Agent struct {
 	maxSteps     int
 	model        string
 	systemPrompt string // 系统提示词，默认用 prompt.go 的 SystemPrompt
+	policy       permission.Policy
+	asker        permission.Asker
 }
 
 type Option func(*Agent)
@@ -33,15 +36,33 @@ func WithSystemPrompt(p string) Option {
 	return func(a *Agent) { a.systemPrompt = p }
 }
 
+// WithPolicy 设置权限策略，启用权限检查。
+func WithPolicy(p permission.Policy) Option {
+	return func(a *Agent) { a.policy = p }
+}
+
+// WithAsker 设置交互式 asker，处理 ActionAsk 决策。
+func WithAsker(asker permission.Asker) Option {
+	return func(a *Agent) { a.asker = asker }
+}
+
 func New(provider llm.Provider, registry *tool.Registry, opts ...Option) *Agent {
 	a := &Agent{
 		provider:     provider,
-		dispatcher:   tool.NewDispatcher(registry),
 		maxSteps:     20,
 		systemPrompt: SystemPrompt, // 默认用 prompt.go 的 SystemPrompt
 	}
 	for _, o := range opts {
 		o(a)
+	}
+	// 根据是否设置 policy/asker 选择 dispatcher 构造方式
+	switch {
+	case a.policy != nil && a.asker != nil:
+		a.dispatcher = tool.NewDispatcherWithPolicyAndAsker(registry, a.policy, a.asker)
+	case a.policy != nil:
+		a.dispatcher = tool.NewDispatcherWithPolicy(registry, a.policy)
+	default:
+		a.dispatcher = tool.NewDispatcher(registry)
 	}
 	// 构造 tool defs
 	for _, t := range registry.List() {
@@ -52,6 +73,14 @@ func New(provider llm.Provider, registry *tool.Registry, opts ...Option) *Agent 
 		})
 	}
 	return a
+}
+
+// SetAsker 运行时注入 asker，同时更新 dispatcher 的 asker。
+func (a *Agent) SetAsker(asker permission.Asker) {
+	a.asker = asker
+	if a.dispatcher != nil {
+		a.dispatcher.SetAsker(asker)
+	}
 }
 
 // Event agent 循环产生的事件，供 UI 渲染。

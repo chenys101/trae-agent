@@ -150,4 +150,11 @@ func merge(dst *Config, src Config) {
 		}
 		dst.Providers[k] = base
 	}
+	// MCP servers: 直接覆盖（server 级别合并）
+	if dst.MCPServers == nil {
+		dst.MCPServers = map[string]MCPServerConfig{}
+	}
+	for k, v := range src.MCPServers {
+		dst.MCPServers[k] = v
+	}
 }
