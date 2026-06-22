@@ -39,19 +39,20 @@
 
 **MVP 命令集**：
 
-| 命令 | 功能 |
-|------|------|
-| `/help` | 列出所有命令 |
-| `/clear` | 清空当前会话上下文 |
-| `/compact` | 手动触发上下文压缩 |
-| `/model` | 切换 provider / model |
-| `/status` | 显示当前配置、token 用量、步数 |
-| `/resume` | 列出并恢复历史会话 |
-| `/agents` | 列出 / 切换可用 agent 配置 |
-| `/mcp` | 列出已挂载 MCP server 及工具 |
-| `/permissions` | 查看 / 修改权限策略 |
-| `/cost` | 显示累计 token 与估算费用 |
-| `/exit` | 退出 |
+| 命令 | 功能 | 状态 |
+|------|------|------|
+| `/help` | 列出所有命令 | ✅ |
+| `/clear` | 清空当前会话上下文 | ✅ |
+| `/compact` | 手动触发上下文压缩 | ✅ |
+| `/model` | 切换 provider / model | ⚠️ 简化（仅显示，不支持运行时切换） |
+| `/status` | 显示当前配置、token 用量、步数 | ✅ |
+| `/resume` | 列出并恢复历史会话 | ✅ |
+| `/sessions` | 列出历史会话 | ✅ |
+| `/agents` | 列出 / 切换可用 agent 配置 | ❌ 规划中 |
+| `/mcp` | 列出已挂载 MCP server 及工具 | ✅ |
+| `/permissions` | 查看 / 修改权限策略 | ✅ |
+| `/cost` | 显示累计 token 与估算费用 | ✅ |
+| `/exit` | 退出 | ✅ |
 
 **验收标准**：
 - 输入 `/` 自动补全命令名
@@ -63,16 +64,16 @@
 
 **对标 Claude Code 工具语义**：
 
-| 工具 | 语义 | 实现 |
-|------|------|---------|
-| `Read` | 读文件，支持行号、offset/limit | 内置 |
-| `Write` | 写文件（覆盖） | 内置 |
-| `Edit` | str_replace 精确替换 | 内置 |
-| `Glob` | 文件名 glob 匹配 | 内置 |
-| `Grep` | 内容正则搜索（ripgrep 语义） | 内置 |
-| `Bash` | 执行 shell 命令，支持超时、后台 | 内置 |
-| `TodoWrite` | 任务清单管理 | 内置 |
-| `Task` | 派发子 agent（P1） | 内置 |
+| 工具 | 语义 | 实现 | 状态 |
+|------|------|---------|------|
+| `Read` | 读文件，支持行号、offset/limit | 内置 | ✅ |
+| `Write` | 写文件（覆盖） | 内置 | ✅ |
+| `Edit` | str_replace 精确替换 | 内置 | ✅ |
+| `Glob` | 文件名 glob 匹配 | 内置 | ✅ |
+| `Grep` | 内容正则搜索（ripgrep 语义） | 内置 | ✅ |
+| `Bash` | 执行 shell 命令，支持超时、后台 | 内置 | ✅ |
+| `TodoWrite` | 任务清单管理 | 内置 | ❌ 规划中 |
+| `Task` | 派发子 agent（P1） | 内置 | ✅ |
 
 **验收标准**：
 - 每个工具有清晰的 JSON schema，LLM 可正确调用
@@ -83,12 +84,12 @@
 ### 4. 多 LLM Provider
 
 **必须支持**：
-- Anthropic（Claude 系列）
-- OpenAI（GPT 系列）
-- Google（Gemini）
-- OpenRouter（聚合）
-- Ollama（本地）
-- 任意 OpenAI 兼容端点（`base_url` 可配）
+- Anthropic（Claude 系列）✅
+- OpenAI（GPT 系列）✅
+- Google（Gemini）❌ 规划中
+- OpenRouter（聚合）❌ 规划中（可用 OpenAI 兼容端点替代）
+- Ollama（本地）❌ 规划中（可用 OpenAI 兼容端点替代）
+- 任意 OpenAI 兼容端点（`base_url` 可配）✅
 
 **验收标准**：
 - 统一的 `Provider` 接口，新增 provider 只实现接口
@@ -163,7 +164,8 @@
 
 ### 12. 脚本化与 headless
 
-- `trae run --headless "task"` 非交互模式，输出 JSON
+- `trae run --json "task"` 非交互模式，输出结构化 JSON
+- `trae run --trajectory "task"` 记录轨迹到 `~/.trae/trajectories/`
 - 可作为 CI 步骤嵌入
 - stdin 接受管道输入
 

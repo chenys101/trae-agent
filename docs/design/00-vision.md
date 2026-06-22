@@ -26,9 +26,9 @@
 | G1 | 单二进制分发 | `go build` 产出一个无外部依赖的可执行文件 |
 | G2 | 流式交互式 REPL | 输出逐 token 流式渲染，`Ctrl+C` 可中断当前步骤 |
 | G3 | 斜杠命令系统 | 内置 `/help` `/clear` `/compact` `/model` `/resume` `/agents` 等 |
-| G4 | 内置工具集 | read / write / edit / glob / grep / bash / todowrite / task 全部内置 |
+| G4 | 内置工具集 | read / write / edit / glob / grep / bash / task 内置（TodoWrite 规划中） |
 | G5 | 子 agent 委派 | Task 工具可派发独立子 agent 并行执行，结果回汇 |
-| G6 | 多 LLM Provider | OpenAI / Anthropic / Google / OpenRouter / Ollama / 兼容 OpenAI 协议的任意端点 |
+| G6 | 多 LLM Provider | OpenAI / Anthropic 已实现；Google / OpenRouter / Ollama 规划中（兼容 OpenAI 协议端点可用） |
 | G7 | 上下文管理 | 自动 compact 长对话、token 预算感知、会话持久化与 resume |
 | G8 | 权限与安全 | 工具调用审批、危险命令拦截、文件读写白名单 |
 | G9 | MCP 支持 | 兼容 Model Context Protocol，可挂载第三方 MCP server |
@@ -43,7 +43,7 @@
 
 ## 历史
 
-本项目前身为 Python 实现（`trae_agent/`），因交互体验、并发模型、分发方式的根本性限制，决定用 Go 从零重写。Python 代码已从仓库中移除，不保留、不兼容、不共存。
+本项目前身为 Python 实现（`trae_agent/`，保留在 `main` 分支），因交互体验、并发模型、分发方式的根本性限制，决定用 Go 从零重写。Go 实现位于 `solo-go` 分支，不保留、不兼容、不共存 Python 代码。
 
 Go 重写时可参考原 Python 实现的设计思路（prompt 设计、工具语义、轨迹记录），但代码全部重写。
 

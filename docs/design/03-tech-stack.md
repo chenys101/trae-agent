@@ -2,7 +2,7 @@
 
 ## 语言与版本
 
-- **Go 1.22+**（要求 1.22 是为了用 `range over int`、增强的 `for` 循环、`slices`/`maps` 标准库）
+- **Go 1.25+**（实际开发环境 go1.25.1）
 - **无 cgo**：纯 Go 静态编译，便于交叉编译与单二进制分发
 - **module path**：`github.com/bytedance/trae-agent`
 

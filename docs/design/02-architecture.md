@@ -36,7 +36,7 @@
           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      Tool Layer                              │
-│  read │ write │ edit │ glob │ grep │ bash │ todo │ task      │
+│  read │ write │ edit │ glob │ grep │ bash │ task             │
 │  ─────────────────────────────────────────────────────────  │
 │              MCP Tools (动态发现)                             │
 └─────────────────────────────────────────────────────────────┘
@@ -44,7 +44,7 @@
           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    LLM Provider Layer                        │
-│  anthropic │ openai │ google │ openrouter │ ollama │ custom  │
+│  anthropic │ openai │ (google/openrouter/ollama 规划中)      │
 │  (统一 StreamEvent 抽象, 统一 tool_call 格式)                 │
 └─────────────────────────────────────────────────────────────┘
           │
@@ -66,17 +66,23 @@ trae-agent/                      # 仓库根 = Go module 根
 │       └── main.go              # CLI 入口
 ├── internal/
 │   ├── agent/                   # Agent Runtime
-│   │   ├── agent.go             # Agent 接口与基础实现
-│   │   ├── loop.go              # think-act 循环
-│   │   ├── context.go           # 上下文管理 / compact
-│   │   ├── subagent.go          # 子 agent 委派
-│   │   └── state.go             # 会话状态
+│   │   ├── loop.go              # think-act 循环 + Event 类型
+│   │   ├── context.go           # 上下文管理 / token 计数
+│   │   ├── compact.go           # compact 实现
+│   │   ├── prompt.go            # system prompt
+│   │   └── subagent.go          # 子 agent 委派 (SubagentRunner)
 │   ├── cli/
-│   │   ├── repl.go              # 交互式 REPL
+│   │   ├── root.go              # cobra 根命令 + config 加载
+│   │   ├── run.go               # run 子命令 + buildAgent
+│   │   ├── interactive.go       # interactive 子命令
+│   │   ├── repl.go              # 交互式 REPL + Asker 实现
 │   │   ├── render.go            # 流式渲染
 │   │   ├── command.go           # 斜杠命令注册与分发
 │   │   ├── interrupt.go         # Ctrl+C 处理
-│   │   └── completion.go        # 命令补全
+│   │   ├── permissions_cmd.go   # /permissions 命令
+│   │   ├── mcp_cmd.go           # /mcp 命令
+│   │   ├── show_config.go       # show-config 子命令
+│   │   └── version.go           # version 子命令
 │   ├── headless/
 │   │   └── runner.go            # 非交互执行
 │   ├── tool/
@@ -88,42 +94,40 @@ trae-agent/                      # 仓库根 = Go module 根
 │   │   ├── glob.go
 │   │   ├── grep.go
 │   │   ├── bash.go
-│   │   ├── todo.go
-│   │   └── task.go
+│   │   └── task.go              # Task 工具 (子 agent 派发)
 │   ├── llm/
 │   │   ├── provider.go          # Provider 接口 + StreamEvent
-│   │   ├── anthropic.go
-│   │   ├── openai.go
-│   │   ├── google.go
-│   │   ├── openrouter.go
-│   │   ├── ollama.go
-│   │   └── retry.go
+│   │   ├── anthropic.go         # Anthropic SSE 流式
+│   │   ├── openai.go            # OpenAI SSE 流式
+│   │   └── retry.go             # 指数退避重试
 │   ├── mcp/
-│   │   ├── client.go            # MCP 客户端
-│   │   └── registry.go          # MCP 工具注册
+│   │   ├── client.go            # MCP 客户端 (JSON-RPC over stdio)
+│   │   ├── protocol.go          # MCP 协议类型
+│   │   ├── tool.go              # MCPTool 适配器
+│   │   └── manager.go           # 多 server 生命周期管理
 │   ├── config/
-│   │   ├── config.go            # 配置加载与合并
-│   │   └── schema.go            # 配置 schema
+│   │   ├── config.go            # 配置结构 + 默认值
+│   │   └── loader.go            # YAML 多级加载与合并
 │   ├── session/
-│   │   ├── store.go             # 会话持久化
-│   │   └── resume.go            # 会话恢复
+│   │   └── store.go             # 会话持久化 + resume
 │   ├── permission/
-│   │   └── policy.go            # 权限策略评估
+│   │   ├── policy.go            # 权限策略评估 + 内置规则
+│   │   ├── store.go             # ~/.trae/permissions.json 持久化
+│   │   └── asker.go             # Asker 接口 + AutoAsker/CallbackAsker
 │   ├── trajectory/
-│   │   └── recorder.go          # 轨迹记录
+│   │   └── recorder.go          # JSONL 轨迹记录
+│   ├── cost/
+│   │   └── pricing.go           # 模型价格表 + 费用估算
 │   └── logger/
-│       └── logger.go
-├── pkg/                         # 可对外暴露的公共库
-│   ├── api/                     # SDK 入口（headless 调用）
-│   └── types/                   # 共享类型
-├── test/
-│   ├── integration/
-│   └── e2e/
+│       └── logger.go            # slog 封装
 ├── docs/                        # 设计文档
-│   └── design/                  # 从 docs/v2-go/ 迁移
+│   └── design/
 ├── Makefile
-└── .golangci.yml
+├── .goreleaser.yml              # 跨平台发布配置
+└── README.md
 ```
+
+> **注**：`pkg/`（公共 SDK）和 `test/`（集成/e2e 测试目录）为规划中，当前未创建。e2e 测试暂放在 `internal/cli/e2e_test.go`。
 
 ## 核心抽象
 

@@ -194,19 +194,19 @@
 **目标**：可发布 v1.0.0。
 
 **任务**：
-1. `internal/trajectory/recorder.go`：轨迹 JSON 记录
-2. `/cost` 费用统计（按 provider 价格表）
-3. `trae run --headless --json` 非交互模式
-4. `goreleaser` 配置：跨平台编译、changelog
-5. README 重写、安装文档
-6. 性能优化：冷启动、内存
-7. 端到端测试：SWE-bench 风格任务
+1. `internal/trajectory/recorder.go`：轨迹 JSON 记录 ✅
+2. `/cost` 费用统计（按 provider 价格表）✅
+3. `trae run --json` 非交互模式 ✅
+4. `goreleaser` 配置：跨平台编译、changelog ✅
+5. README 重写、安装文档 ✅
+6. 性能优化：冷启动、内存（待补基线测试）
+7. 端到端测试：SWE-bench 风格任务 ✅（e2e_test.go 3 个冒烟测试）
 
 **验收**：
-- 单二进制 < 30MB
-- 冷启动到首 token < 500ms
-- `trae run --headless "task" --json` 输出结构化结果
-- GitHub release 自动产出 macOS/Linux 二进制
+- 单二进制 < 30MB ✅（12MB）
+- 冷启动到首 token < 500ms（待测）
+- `trae run --json "task"` 输出结构化结果 ✅
+- GitHub release 自动产出 macOS/Linux 二进制 ✅（goreleaser 配置就绪）
 
 ---
 
