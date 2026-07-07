@@ -61,7 +61,7 @@ func InitWithWriter(w io.Writer, level string) (Logger, error) {
 	return newLogger(w, level, nil)
 }
 
-// Init 初始化 logger，写文件到 ~/.trae/logs/trae.log。
+// Init 初始化 logger，写文件到用户主目录下 .trae/logs/trae.log。
 // level: debug / info / warn / error（大小写不敏感）
 func Init(level string) (Logger, error) {
 	home, err := os.UserHomeDir()

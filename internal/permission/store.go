@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/bytedance/trae-agent/internal/util"
 )
 
 // Store 权限规则持久化存储。
@@ -11,7 +13,7 @@ type Store struct {
 	path string
 }
 
-// NewStore 创建存储实例，路径为 ~/.trae/permissions.json。
+// NewStore 创建存储实例，路径为用户主目录下 .trae/permissions.json。
 func NewStore() (*Store, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -56,10 +58,6 @@ func (s *Store) Save(p *DefaultPolicy) error {
 	if err != nil {
 		return err
 	}
-	// 原子写入：先写临时文件再 rename
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, s.path)
+	// 原子写入：先写临时文件再 rename，Windows 上 rename 失败时回退到直接写入
+	return util.AtomicWrite(s.path, data, 0o600)
 }

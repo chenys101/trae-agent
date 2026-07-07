@@ -13,7 +13,6 @@ import (
 	"github.com/bytedance/trae-agent/internal/cost"
 	"github.com/bytedance/trae-agent/internal/llm"
 	"github.com/bytedance/trae-agent/internal/mcp"
-	"github.com/bytedance/trae-agent/internal/memory"
 	"github.com/bytedance/trae-agent/internal/permission"
 	"github.com/bytedance/trae-agent/internal/session"
 	"github.com/bytedance/trae-agent/internal/tool"
@@ -107,17 +106,10 @@ func buildAgent(ctx context.Context, cfg config.Config, providerFlag, modelFlag 
 	if maxSteps == 0 {
 		maxSteps = defaultMaxStepsFallback
 	}
-
-	// 加载项目记忆，注入 system prompt
-	workDir, _ := os.Getwd()
-	mem := memory.Load(workDir)
-	systemPrompt := agent.BuildSystemPrompt(mem)
-
 	// headless 默认 AutoAsker deny；interactive 模式由 REPL 覆盖
 	a := agent.New(llmProvider, fullRegistry,
 		agent.WithMaxSteps(maxSteps),
 		agent.WithModel(modelFlag),
-		agent.WithSystemPrompt(systemPrompt),
 		agent.WithPolicy(policy),
 		agent.WithAsker(&permission.AutoAsker{Default: permission.ActionDeny}),
 	)
@@ -193,7 +185,7 @@ func NewRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&providerFlag, "provider", "", "LLM provider (anthropic/openai)")
 	cmd.Flags().StringVar(&modelFlag, "model", "", "model name override")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Output structured JSON result (headless mode)")
-	cmd.Flags().BoolVar(&trajectoryFlag, "trajectory", false, "Record trajectory to ~/.trae/trajectories/")
+	cmd.Flags().BoolVar(&trajectoryFlag, "trajectory", false, "Record trajectory to user home dir under .trae/trajectories/")
 	return cmd
 }
 

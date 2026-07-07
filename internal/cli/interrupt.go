@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -78,7 +77,8 @@ func (h *InterruptHandler) Reset() {
 // 仅在 agent 运行时启用，避免与 readline 的信号捕获冲突。
 func (h *InterruptHandler) StartAgentSignalListener() func() {
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT)
+	// 用 os.Interrupt 替代 syscall.SIGINT，跨平台兼容
+	signal.Notify(sigCh, os.Interrupt)
 	go func() {
 		// range 在 close 后自动退出，无需 nil 检查
 		for range sigCh {
@@ -96,8 +96,9 @@ func (h *InterruptHandler) StartAgentSignalListener() func() {
 				h.mu.Unlock()
 			} else if h.pressed {
 				// agent 运行时第二次 Ctrl+C（cancel 已被调用），强制退出
+				// Unix 约定退出码 130 (128+SIGINT)，Windows 用 1
 				h.mu.Unlock()
-				os.Exit(130)
+				os.Exit(1)
 			} else {
 				h.pressed = true
 				h.lastPress = now

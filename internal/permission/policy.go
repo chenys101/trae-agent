@@ -2,6 +2,7 @@ package permission
 
 import (
 	"encoding/json"
+	"runtime"
 	"strings"
 )
 
@@ -127,10 +128,18 @@ func ExtractKeyArg(tool string, args json.RawMessage) string {
 	return string(args)
 }
 
-// builtinRules 返回内置危险命令规则。
+// builtinRules 返回内置危险命令规则（按平台区分）。
 // 顺序很重要：具体的规则在前（如 rm -rf /），宽泛的在后（如 rm -rf），
 // 因为内置规则从前往后匹配，先匹配到的优先。
 func builtinRules() []Rule {
+	if runtime.GOOS == "windows" {
+		return builtinRulesWindows()
+	}
+	return builtinRulesUnix()
+}
+
+// builtinRulesUnix 返回 Unix 平台内置危险命令规则。
+func builtinRulesUnix() []Rule {
 	return []Rule{
 		// Deny: 不可恢复的破坏性操作
 		{Tool: "bash", Args: []string{"rm -rf /"}, Action: ActionDeny, Desc: "rm -rf / 禁止执行"},
@@ -139,6 +148,21 @@ func builtinRules() []Rule {
 		{Tool: "bash", Args: []string{":(){ :|:& };:"}, Action: ActionDeny, Desc: "fork bomb 禁止执行"},
 		// Ask: 需要确认的操作
 		{Tool: "bash", Args: []string{"rm -rf"}, Action: ActionAsk, Desc: "rm -rf 需要确认"},
+		{Tool: "bash", Args: []string{"git push"}, Action: ActionAsk, Desc: "git push 需要确认"},
+		{Tool: "bash", Args: []string{"git push --force"}, Action: ActionAsk, Desc: "git push --force 需要确认"},
+	}
+}
+
+// builtinRulesWindows 返回 Windows 平台内置危险命令规则。
+func builtinRulesWindows() []Rule {
+	return []Rule{
+		// Deny: 不可恢复的破坏性操作
+		{Tool: "bash", Args: []string{"format "}, Action: ActionDeny, Desc: "format 格式化磁盘禁止执行"},
+		{Tool: "bash", Args: []string{"rd /s /q"}, Action: ActionDeny, Desc: "rd /s /q 递归删除禁止执行"},
+		{Tool: "bash", Args: []string{"del /s /q"}, Action: ActionDeny, Desc: "del /s /q 批量删除禁止执行"},
+		{Tool: "bash", Args: []string{"diskpart"}, Action: ActionDeny, Desc: "diskpart 磁盘操作禁止执行"},
+		// Ask: 需要确认的操作
+		{Tool: "bash", Args: []string{"rmdir /s"}, Action: ActionAsk, Desc: "rmdir /s 需要确认"},
 		{Tool: "bash", Args: []string{"git push"}, Action: ActionAsk, Desc: "git push 需要确认"},
 		{Tool: "bash", Args: []string{"git push --force"}, Action: ActionAsk, Desc: "git push --force 需要确认"},
 	}

@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -28,14 +28,31 @@ func NewBash(defaultTimeout time.Duration) *Bash {
 	return &Bash{defaultTimeout: defaultTimeout}
 }
 
+// shellName 返回当前平台的默认 shell 名。
+// Unix 用 sh，Windows 用 cmd。保持工具名为 "bash" 以兼容已有权限规则。
+func shellName() string {
+	if runtime.GOOS == "windows" {
+		return "cmd"
+	}
+	return "bash"
+}
+
+// shellFlag 返回执行单条命令的 flag（-c 或 /c）。
+func shellFlag() string {
+	if runtime.GOOS == "windows" {
+		return "/c"
+	}
+	return "-c"
+}
+
 func (Bash) Name() string        { return "bash" }
-func (Bash) Description() string { return "Execute a bash command. Returns combined stdout+stderr." }
+func (Bash) Description() string { return "Execute a shell command. Returns combined stdout+stderr." }
 
 func (Bash) Schema() json.RawMessage {
 	return json.RawMessage(`{
   "type": "object",
   "properties": {
-    "command": {"type": "string", "description": "bash command to execute"},
+    "command": {"type": "string", "description": "shell command to execute"},
     "workdir": {"type": "string", "description": "working directory, default cwd"},
     "timeout_ms": {"type": "integer", "description": "timeout in milliseconds"}
   },
@@ -68,22 +85,24 @@ func (b *Bash) Run(ctx context.Context, args json.RawMessage) Result {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "bash", "-c", a.Command)
+	// 按平台选择 shell：Unix 用 bash -c，Windows 用 cmd /c
+	cmd := exec.CommandContext(ctx, shellName(), shellFlag(), a.Command)
 	if a.Workdir != "" {
 		cmd.Dir = a.Workdir
 	}
-	// 设置独立进程组，cancel 时 kill 整个进程组，
-	// 避免 bash 派生的子进程（如 `sleep 100 &`）在父进程退出后仍存活
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	// context 取消时杀整个进程组（负 PID 表示进程组）
+	// 设置进程组（Unix）或 Job Object（Windows），cancel 时杀整个进程组，
+	// 避免 shell 派生的子进程在父进程退出后仍存活。
+	// 具体实现见 exec_unix.go / exec_windows.go
+	setProcessGroup(cmd)
+	// context 取消时杀整个进程组
 	cmd.Cancel = func() error {
 		if cmd.Process != nil {
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			killProcessGroup(cmd.Process.Pid)
 		}
 		return os.ErrProcessDone
 	}
 
-	// 用 LimitWriter 限制输出大小，避免 `yes` / `cat /dev/zero` 等命令导致 OOM
+	// 用 LimitWriter 限制输出大小，避免无限输出命令导致 OOM
 	var buf bytes.Buffer
 	limited := &limitedWriter{w: &buf, max: maxBashOutput}
 	cmd.Stdout = limited
@@ -151,7 +170,9 @@ func filterEnv(env []string) []string {
 	var out []string
 	for _, e := range env {
 		idx := strings.Index(e, "=")
-		if idx < 0 {
+		// idx <= 0 跳过：无 = 的行，以及空 key 的行
+		// Windows 有 =C: 这类隐式驱动器变量，key 为空，需跳过
+		if idx <= 0 {
 			continue
 		}
 		key := strings.ToUpper(e[:idx])

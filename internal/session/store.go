@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bytedance/trae-agent/internal/llm"
+	"github.com/bytedance/trae-agent/internal/util"
 )
 
 // CurrentVersion 当前会话 schema 版本。新增字段或改变结构时递增。
@@ -26,7 +27,7 @@ type Session struct {
 	Usage     llm.Usage     `json:"usage"`
 }
 
-// Store 会话存储，持久化到 ~/.trae/sessions/。
+// Store 会话存储，持久化到用户主目录下 .trae/sessions/。
 type Store struct {
 	dir string
 }
@@ -70,13 +71,9 @@ func (s *Store) Save(sess *Session) error {
 		return err
 	}
 	path := filepath.Join(s.dir, sess.ID+".json")
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return fmt.Errorf("write tmp file: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("rename tmp file: %w", err)
+	// 原子写入：先写临时文件再 rename，Windows 上 rename 失败时回退到直接写入
+	if err := util.AtomicWrite(path, data, 0o600); err != nil {
+		return fmt.Errorf("write session file: %w", err)
 	}
 	return nil
 }

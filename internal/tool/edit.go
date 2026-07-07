@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+
+	"github.com/bytedance/trae-agent/internal/util"
 )
 
 type Edit struct{}
@@ -69,7 +71,7 @@ func (Edit) Run(ctx context.Context, args json.RawMessage) Result {
 			return ErrorResult("old_string not found")
 		}
 		newContent := strings.ReplaceAll(content, a.OldString, a.NewString)
-		if err := atomicWrite(a.FilePath, []byte(newContent)); err != nil {
+		if err := util.AtomicWrite(a.FilePath, []byte(newContent), 0o644); err != nil {
 			return ErrorResult("write file: %v", err)
 		}
 		return Result{Content: "replaced all in " + a.FilePath}
@@ -84,21 +86,8 @@ func (Edit) Run(ctx context.Context, args json.RawMessage) Result {
 	}
 
 	newContent := strings.Replace(content, a.OldString, a.NewString, 1)
-	if err := atomicWrite(a.FilePath, []byte(newContent)); err != nil {
+	if err := util.AtomicWrite(a.FilePath, []byte(newContent), 0o644); err != nil {
 		return ErrorResult("write file: %v", err)
 	}
 	return Result{Content: "edited " + a.FilePath}
-}
-
-// atomicWrite 原子写入：先写临时文件再 rename，避免写入中途崩溃导致文件损坏。
-func atomicWrite(path string, data []byte) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return nil
 }

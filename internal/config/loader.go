@@ -25,7 +25,7 @@ func Load(opts LoadOptions) (Config, error) {
 		opts.ProjectDir = os.Getenv("TRAE_PROJECT_DIR")
 	}
 
-	// 1. 用户级 ~/.trae/config.yaml
+	// 1. 用户级配置：用户主目录下 .trae/config.yaml
 	userPath, err := userConfigPath()
 	if err != nil {
 		return cfg, fmt.Errorf("resolve user config path: %w", err)

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/bytedance/trae-agent/internal/util"
 )
 
 type Write struct{}
@@ -47,7 +49,7 @@ func (Write) Run(ctx context.Context, args json.RawMessage) Result {
 		return ErrorResult("mkdir: %v", err)
 	}
 	// 原子写：先写临时文件再 rename，避免写入中途崩溃导致文件损坏
-	if err := atomicWrite(a.FilePath, []byte(a.Content)); err != nil {
+	if err := util.AtomicWrite(a.FilePath, []byte(a.Content), 0o644); err != nil {
 		return ErrorResult("write file: %v", err)
 	}
 	return Result{Content: "wrote " + a.FilePath}
