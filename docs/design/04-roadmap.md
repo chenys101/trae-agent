@@ -227,8 +227,33 @@ M0 ── M1 ── M2 ── M3 ── M4 ── M5
 
 ## 后续迭代（v1.1+）
 
-- 配置即代码（`.trae/` 项目配置）
+### v1.1 — 对标 Claude Code / Kimi Code 核心体验差距
+
+以下功能按优先级排序，P0 为最高。
+
+**P0 核心体验（已实现）**
+- ✅ 项目记忆系统：`.trae/AGENTS.md` 加载 + `/init` 自动分析生成
+- ✅ 自定义斜杠命令：从 `.trae/commands/*.md` 加载，支持 `$ARGUMENTS` 和 `$1/$2` 参数
+- ✅ 扩展思考：`think`/`think hard`/`think harder`/`ultrathink` 分级思考预算
+- ✅ 计划模式：`/plan` 切换只规划不执行
+
+**P0 待实现**
+- 模型运行时切换：`/model <name>` 在 REPL 中热切换模型（当前只读）
+
+**P1 增强能力**
+- IDE 集成协议（ACP）：与 Zed/VSCode 联动，获取打开文件、linter 警告等上下文
+- Hooks 生命周期钩子：agent 各阶段自动化钩子，接入 CI/CD 流程
+- 多模态输入：图片/截图转代码（对标 Kimi Code）
+- 代码审查流程：`/review` 安全/性能/风格检测命令
+- Anthropic extended thinking 原生支持：通过 API thinking 参数实现真正的扩展思考
+
+**P2 生态扩展**
+- 插件/技能系统：第三方插件生态，`/plugin` + `/skills` 管理
+- 国内模型 provider：通义千问、DeepSeek、Kimi K2 接入
+- 企业级云接入：AWS Bedrock / Google Cloud Vertex
+- 超长上下文优化：RAG 分块检索策略，支持大型代码库分析
+- 多会话并行：同时处理多个独立任务
 - OpenTelemetry trace 导出
 - 更多子 agent 类型（test-runner、reviewer）
-- 自定义 agent 定义文件
 - Web UI（可选）
+- 配置即代码（`.trae/` 项目配置）

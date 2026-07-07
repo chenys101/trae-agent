@@ -13,6 +13,7 @@ import (
 	"github.com/bytedance/trae-agent/internal/cost"
 	"github.com/bytedance/trae-agent/internal/llm"
 	"github.com/bytedance/trae-agent/internal/mcp"
+	"github.com/bytedance/trae-agent/internal/memory"
 	"github.com/bytedance/trae-agent/internal/permission"
 	"github.com/bytedance/trae-agent/internal/session"
 	"github.com/bytedance/trae-agent/internal/tool"
@@ -106,10 +107,17 @@ func buildAgent(ctx context.Context, cfg config.Config, providerFlag, modelFlag 
 	if maxSteps == 0 {
 		maxSteps = defaultMaxStepsFallback
 	}
+
+	// 加载项目记忆，注入 system prompt
+	workDir, _ := os.Getwd()
+	mem := memory.Load(workDir)
+	systemPrompt := agent.BuildSystemPrompt(mem)
+
 	// headless 默认 AutoAsker deny；interactive 模式由 REPL 覆盖
 	a := agent.New(llmProvider, fullRegistry,
 		agent.WithMaxSteps(maxSteps),
 		agent.WithModel(modelFlag),
+		agent.WithSystemPrompt(systemPrompt),
 		agent.WithPolicy(policy),
 		agent.WithAsker(&permission.AutoAsker{Default: permission.ActionDeny}),
 	)

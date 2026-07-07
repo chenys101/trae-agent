@@ -138,6 +138,19 @@ func (a *Agent) RunWithHistory(ctx context.Context, messages *[]llm.Message, eve
 			Messages: *messages,
 			Tools:    a.tools,
 		}
+		// 首步检测用户输入中的思考关键词，提升 maxTokens 给更多推理空间
+		if step == 0 && len(*messages) > 0 {
+			lastUser := ""
+			for i := len(*messages) - 1; i >= 0; i-- {
+				if (*messages)[i].Role == llm.RoleUser {
+					lastUser = (*messages)[i].Content
+					break
+				}
+			}
+			if budget := ThinkingBudget(lastUser); budget > 0 {
+				req.MaxTokens = 4096 + budget
+			}
+		}
 
 		ch, err := a.provider.Stream(ctx, req)
 		if err != nil {

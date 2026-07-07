@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/bytedance/trae-agent/internal/cost"
@@ -12,8 +13,9 @@ import (
 
 // CommandResult 命令执行结果。
 type CommandResult struct {
-	Message string // 输出消息（空则不打印）
-	Exit    bool   // 是否退出 REPL
+	Message    string // 输出消息（空则不打印）
+	Exit       bool   // 是否退出 REPL
+	AgentInput string // 非空时触发主循环执行 agent（复用渲染流程）
 }
 
 // Command 斜杠命令定义。
@@ -33,7 +35,26 @@ type CommandRegistry struct {
 func NewCommandRegistry() *CommandRegistry {
 	r := &CommandRegistry{commands: make(map[string]*Command)}
 	r.registerBuiltin()
+	r.loadCustom()
 	return r
+}
+
+// loadCustom 从 .trae/commands/ 加载自定义斜杠命令。
+// 内置命令优先：同名自定义命令不会覆盖已注册的内置命令。
+func (r *CommandRegistry) loadCustom() {
+	workDir, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	cmds := LoadCustomCommands(workDir)
+	for _, cc := range cmds {
+		cmd := cc.ToCommand()
+		// 内置命令优先，同名自定义命令跳过
+		if _, exists := r.commands[cmd.Name]; exists {
+			continue
+		}
+		r.Register(cmd)
+	}
 }
 
 // Register 注册命令。重复命令名会覆盖 map 中的旧条目，但不重复 append order，
@@ -220,4 +241,6 @@ func (r *CommandRegistry) registerBuiltin() {
 	})
 	r.Register(NewPermissionsCmd())
 	r.Register(NewMCPCmd())
+	r.Register(NewInitCmd())
+	r.Register(NewPlanCmd())
 }

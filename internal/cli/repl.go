@@ -45,6 +45,8 @@ type REPL struct {
 	permStore  *permission.Store
 	mcpMgr     *mcp.Manager
 	askMu      sync.Mutex
+	mu         sync.Mutex // 保护 planMode 等可变状态
+	planMode   bool        // 计划模式：agent 只规划不执行
 }
 
 // NewREPL 构造 REPL 实例。
@@ -175,8 +177,13 @@ func (r *REPL) Run(ctx context.Context) error {
 		}
 
 		if strings.HasPrefix(line, "/") {
-			if exit := r.handleCommand(line); exit {
+			exit, agentInput := r.handleCommand(line)
+			if exit {
 				return nil
+			}
+			// /init 等命令返回 agentInput 时，触发 agent 执行
+			if agentInput != "" {
+				r.runAgent(ctx, agentInput, interrupter)
 			}
 			continue
 		}
@@ -192,6 +199,14 @@ func (r *REPL) runAgent(ctx context.Context, userInput string, interrupter *Inte
 	defer stopListener()
 	defer interrupter.SetCancel(nil)
 	defer cancel() // 避免 context 泄漏
+
+	// plan 模式：在用户输入前追加 plan 指令
+	r.mu.Lock()
+	planOn := r.planMode
+	r.mu.Unlock()
+	if planOn {
+		userInput = agent.PlanModePrefix + userInput
+	}
 
 	// 先暂存消息，agent 成功后才提交到 r.messages
 	pendingMessages := make([]llm.Message, len(r.messages))
@@ -276,22 +291,24 @@ func (r *REPL) println(s string) {
 	fmt.Fprintln(r.rl.Stdout(), s)
 }
 
-func (r *REPL) handleCommand(line string) (exit bool) {
+// handleCommand 处理斜杠命令。
+// 返回 exit 表示是否退出 REPL，agentInput 非空时触发主循环执行 agent。
+func (r *REPL) handleCommand(line string) (exit bool, agentInput string) {
 	parts := strings.Fields(line)
 	if len(parts) == 0 {
-		return false
+		return false, ""
 	}
 	cmd, ok := r.commands.Get(parts[0])
 	if !ok {
 		r.println(fmt.Sprintf("unknown command: %s (type /help)", parts[0]))
-		return false
+		return false, ""
 	}
 	result := cmd.Handler(r, parts[1:])
 	if result.Exit {
-		return true
+		return true, ""
 	}
 	if result.Message != "" {
 		r.println(result.Message)
 	}
-	return false
+	return false, result.AgentInput
 }

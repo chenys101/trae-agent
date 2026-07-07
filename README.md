@@ -55,7 +55,15 @@ log_level: info
 trae interactive
 ```
 
-REPL 命令：`/help` `/exit` `/clear` `/status` `/cost` `/model` `/compact` `/sessions` `/resume` `/permissions` `/mcp`
+REPL 命令：`/help` `/exit` `/clear` `/status` `/cost` `/model` `/compact` `/sessions` `/resume` `/permissions` `/mcp` `/init` `/plan`
+
+**项目记忆**：`/init` 自动分析项目并生成 `.trae/AGENTS.md`，后续会话自动加载。
+
+**自定义命令**：在 `.trae/commands/` 目录下放置 `.md` 文件即可注册斜杠命令，支持 `$ARGUMENTS` 和 `$1`/`$2` 参数。
+
+**扩展思考**：输入中包含 `think`/`think hard`/`think harder`/`ultrathink` 触发分级思考预算。
+
+**计划模式**：`/plan` 切换只规划不执行模式，适合复杂任务先规划后执行。
 
 ### 单次运行
 
