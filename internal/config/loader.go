@@ -117,6 +117,11 @@ func merge(dst *Config, src Config) {
 	if src.LogLevel != "" {
 		dst.LogLevel = src.LogLevel
 	}
+	// LogFile 支持覆盖为 "off"（关闭文件日志），故用显式非空判断。
+	// 空字符串表示未设置，保留 dst 默认值。
+	if src.LogFile != "" {
+		dst.LogFile = src.LogFile
+	}
 	if src.SystemPrompt != "" {
 		dst.SystemPrompt = src.SystemPrompt
 	}

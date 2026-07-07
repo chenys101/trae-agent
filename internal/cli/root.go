@@ -32,7 +32,8 @@ func NewRootCmd() *cobra.Command {
 				return err
 			}
 			ctx := context.WithValue(cmd.Context(), configKey{}, cfg)
-			l, err := logger.Init(cfg.LogLevel)
+			// logger 同时输出到控制台(stderr)和文件，文件路径由 cfg.LogFile 配置
+			l, err := logger.Init(cfg.LogLevel, cfg.LogFile)
 			if err != nil {
 				return err
 			}

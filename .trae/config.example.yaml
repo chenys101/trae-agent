@@ -8,6 +8,14 @@ default_provider: anthropic
 # 日志级别：debug / info / warn / error
 log_level: info
 
+# 日志文件路径：
+#   留空（默认）→ ~/.trae/logs/trae.log
+#   "off"      → 不写文件，仅控制台输出
+#   指定路径   → 写入指定文件（支持 ~/ 前缀，如 ~/my-logs/trae.log）
+# 日志同时输出到控制台(stderr)和文件，控制台用精简格式便于实时查看，
+# 文件用完整格式（含时间戳）便于事后排查。
+# log_file: ~/.trae/logs/trae.log
+
 # agent 最大步数（单次对话中工具调用的最大轮次）
 max_steps: 20
 

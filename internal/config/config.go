@@ -5,6 +5,7 @@ type Config struct {
 	DefaultProvider string                     `yaml:"default_provider"`
 	Providers       map[string]ProviderConfig  `yaml:"model_providers"`
 	LogLevel        string                     `yaml:"log_level"`
+	LogFile         string                     `yaml:"log_file"`
 	SystemPrompt    string                     `yaml:"system_prompt"`
 	MaxSteps        int                        `yaml:"max_steps"`
 	MCPServers      map[string]MCPServerConfig `yaml:"mcp_servers"`
@@ -66,6 +67,7 @@ type redactedConfig struct {
 	DefaultProvider string                            `yaml:"default_provider"`
 	Providers       map[string]redactedProviderConfig `yaml:"model_providers"`
 	LogLevel        string                            `yaml:"log_level"`
+	LogFile         string                            `yaml:"log_file"`
 	SystemPrompt    string                            `yaml:"system_prompt"`
 	MaxSteps        int                               `yaml:"max_steps"`
 	MCPServers      map[string]MCPServerConfig        `yaml:"mcp_servers"`
@@ -89,6 +91,7 @@ func (c Config) Redacted() redactedConfig {
 		DefaultProvider: c.DefaultProvider,
 		Providers:       providers,
 		LogLevel:        c.LogLevel,
+		LogFile:         c.LogFile,
 		SystemPrompt:    c.SystemPrompt,
 		MaxSteps:        c.MaxSteps,
 		MCPServers:      mcpServers,
@@ -102,7 +105,9 @@ func Default() Config {
 		DefaultProvider: "",
 		Providers:       map[string]ProviderConfig{},
 		LogLevel:        "info",
-		MaxSteps:        20,
-		MCPServers:      map[string]MCPServerConfig{},
+		// LogFile 留空：由 logger.Init 解析为默认 ~/.trae/logs/trae.log
+		LogFile:    "",
+		MaxSteps:   20,
+		MCPServers: map[string]MCPServerConfig{},
 	}
 }

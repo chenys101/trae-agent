@@ -5,15 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 
 	"github.com/bytedance/trae-agent/internal/agent"
+	"github.com/bytedance/trae-agent/internal/errors"
 	"github.com/bytedance/trae-agent/internal/llm"
 	"github.com/bytedance/trae-agent/internal/mcp"
 	"github.com/bytedance/trae-agent/internal/permission"
 	"github.com/bytedance/trae-agent/internal/session"
 	"github.com/chzyer/readline"
+	"github.com/mattn/go-isatty"
 )
 
 // SessionStore 会话存储接口（供测试 mock）。
@@ -130,8 +133,16 @@ func (r *REPL) persistRule(tool, args string, action permission.Action) {
 
 // Run 启动 REPL 主循环，阻塞直到用户退出。
 func (r *REPL) Run(ctx context.Context) error {
-	// 测试可注入 r.rl，跳过 readline 初始化
+	// 测试可注入 r.rl，跳过 readline 初始化与 TTY 检测
 	if r.rl == nil {
+		// 非交互环境（管道/CI/重定向）下 readline 会立即收到 EOF，
+		// 导致 "bye" 后静默退出，体验差。此处显式检测并给出引导。
+		if !isTerminal(os.Stdin.Fd()) {
+			return errors.New(errors.CodeInvalidArg,
+				"interactive 模式需要终端(TTY)，但当前 stdin 不是终端。\n"+
+					"可能原因：通过管道、重定向或 IDE 输出窗口运行。\n"+
+					"非交互场景请使用: trae run \"<你的提问>\"")
+		}
 		rl, err := readline.NewEx(&readline.Config{
 			Prompt:          "trae> ",
 			AutoComplete:    r.commands.Completer(),
@@ -311,4 +322,10 @@ func (r *REPL) handleCommand(line string) (exit bool, agentInput string) {
 		r.println(result.Message)
 	}
 	return false, result.AgentInput
+}
+
+// isTerminal 检测 fd 是否为交互式终端。
+// 兼容原生终端与 Windows 下 Cygwin/MSYS 终端。
+func isTerminal(fd uintptr) bool {
+	return isatty.IsTerminal(fd) || isatty.IsCygwinTerminal(fd)
 }
