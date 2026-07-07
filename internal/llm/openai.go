@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+
+	"github.com/bytedance/trae-agent/internal/consts"
 )
 
 type OpenAI struct {
@@ -28,13 +30,13 @@ func NewOpenAI(apiKey, baseURL, defaultModel string) *OpenAI {
 func (o *OpenAI) Name() string { return "openai" }
 
 type openaiRequest struct {
-	Model         string             `json:"model"`
-	Messages      []openaiMsg        `json:"messages"`
-	MaxTokens     int                `json:"max_tokens,omitempty"`
-	Temperature   float64            `json:"temperature,omitempty"`
-	Stream        bool               `json:"stream"`
-	StreamOptions *openaiStreamOpts  `json:"stream_options,omitempty"`
-	Tools         []openaiTool       `json:"tools,omitempty"`
+	Model         string            `json:"model"`
+	Messages      []openaiMsg       `json:"messages"`
+	MaxTokens     int               `json:"max_tokens,omitempty"`
+	Temperature   float64           `json:"temperature,omitempty"`
+	Stream        bool              `json:"stream"`
+	StreamOptions *openaiStreamOpts `json:"stream_options,omitempty"`
+	Tools         []openaiTool      `json:"tools,omitempty"`
 }
 
 type openaiTool struct {
@@ -135,11 +137,11 @@ func (o *OpenAI) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
 		// 限制读取 4KB，避免错误响应体过大或为二进制时污染日志/错误信息。
-		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4*1024))
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, consts.APIErrorLimit))
 		return nil, fmt.Errorf("openai api error (status %d): %s", resp.StatusCode, strings.TrimSpace(string(errBody)))
 	}
 
-	ch := make(chan StreamEvent, 16)
+	ch := make(chan StreamEvent, consts.StreamBufferSize)
 	go o.pumpSSE(ctx, resp.Body, ch)
 	return ch, nil
 }
@@ -150,7 +152,7 @@ func (o *OpenAI) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- Stre
 
 	scanner := bufio.NewScanner(body)
 	// 上限 10MB，避免大 tool_call 参数（如长文件内容）被截断导致 JSON 不完整。
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	scanner.Buffer(make([]byte, 0, consts.ScannerInitialBuf), consts.ScannerMaxBuf)
 	var inputTokens, outputTokens int
 	var stopReason string
 	toolAccums := map[int]*toolCallAccum{}

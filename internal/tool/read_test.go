@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/bytedance/trae-agent/internal/consts"
 )
 
 func TestRead_fullFile(t *testing.T) {
@@ -124,8 +126,8 @@ func TestRead_preservesTrailingEmptyLines(t *testing.T) {
 func TestRead_fileTooLarge(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "big.txt")
-	// 写入超过 maxFileSize 的文件
-	os.WriteFile(path, make([]byte, maxFileSize+1), 0o644)
+	// 写入超过 consts.MaxFileSize 的文件
+	os.WriteFile(path, make([]byte, consts.MaxFileSize+1), 0o644)
 
 	r := NewRead()
 	args, _ := json.Marshal(map[string]string{"file_path": path})

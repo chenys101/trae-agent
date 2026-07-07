@@ -3,6 +3,7 @@ package agent
 import (
 	"unicode/utf8"
 
+	"github.com/bytedance/trae-agent/internal/consts"
 	"github.com/bytedance/trae-agent/internal/llm"
 )
 
@@ -24,8 +25,8 @@ func WithCompactKeep(n int) ContextOption {
 
 func NewContextManager(opts ...ContextOption) *ContextManager {
 	c := &ContextManager{
-		maxTokens:   100000, // 默认 10 万 token 触发
-		compactKeep: 6,      // 默认保留最近 6 条消息（3 轮）
+		maxTokens:   consts.DefaultMaxTokens,   // 默认 10 万 token 触发
+		compactKeep: consts.DefaultCompactKeep, // 默认保留最近 6 条消息（3 轮）
 	}
 	for _, o := range opts {
 		o(c)
@@ -43,14 +44,14 @@ func EstimateTokens(messages []llm.Message) int {
 	for _, m := range messages {
 		runes := utf8.RuneCountInString(m.Content)
 		// 混合估算：假设中英混合，平均每字符 ~0.5 token
-		total += runes / 2
+		total += runes / consts.TokenEstimateRatio
 		for _, tc := range m.ToolCalls {
-			total += utf8.RuneCountInString(tc.Name) / 2
-			total += utf8.RuneCountInString(tc.Args) / 2
+			total += utf8.RuneCountInString(tc.Name) / consts.TokenEstimateRatio
+			total += utf8.RuneCountInString(tc.Args) / consts.TokenEstimateRatio
 		}
 	}
 	// 每条消息固定开销（role 标记等）
-	total += len(messages) * 4
+	total += len(messages) * consts.MsgOverheadTokens
 	return total
 }
 

@@ -7,25 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"sort"
 	"strings"
-	"time"
-)
 
-// httpClient 为 llm 包共享的 HTTP 客户端。
-// 流式场景需要长连接，故不设置 Client.Timeout；转而在 Transport 层
-// 设置连接/握手/响应头超时，避免请求卡死在建立连接阶段。
-var httpClient = &http.Client{
-	Transport: &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout: 30 * time.Second,
-		}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-	},
-}
+	"github.com/bytedance/trae-agent/internal/consts"
+)
 
 type Anthropic struct {
 	apiKey       string
@@ -128,11 +115,11 @@ func (a *Anthropic) Stream(ctx context.Context, req Request) (<-chan StreamEvent
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
 		// 限制读取 4KB，避免错误响应体过大或为二进制时污染日志/错误信息。
-		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4*1024))
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, consts.APIErrorLimit))
 		return nil, fmt.Errorf("anthropic api error (status %d): %s", resp.StatusCode, strings.TrimSpace(string(errBody)))
 	}
 
-	ch := make(chan StreamEvent, 16)
+	ch := make(chan StreamEvent, consts.StreamBufferSize)
 	go a.pumpSSE(ctx, resp.Body, ch)
 	return ch, nil
 }
@@ -143,7 +130,7 @@ func (a *Anthropic) pumpSSE(ctx context.Context, body io.ReadCloser, ch chan<- S
 
 	scanner := bufio.NewScanner(body)
 	// 上限 10MB，避免大 tool_call 参数（如长文件内容）被截断导致 JSON 不完整。
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	scanner.Buffer(make([]byte, 0, consts.ScannerInitialBuf), consts.ScannerMaxBuf)
 	var inputTokens, outputTokens int
 	var stopReason string
 	toolAccums := map[int]*toolCallAccum{}

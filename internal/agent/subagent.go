@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bytedance/trae-agent/internal/consts"
 	"github.com/bytedance/trae-agent/internal/llm"
 	"github.com/bytedance/trae-agent/internal/tool"
 )
@@ -99,7 +100,7 @@ func (r *SubagentRunner) Run(ctx context.Context, st SubagentType, prompt string
 	restrictedReg := st.RestrictedRegistry(r.registry)
 
 	subAgent := New(r.provider, restrictedReg,
-		WithMaxSteps(10),
+		WithMaxSteps(consts.DefaultSubagentMaxSteps),
 		WithModel(r.model),
 		WithSystemPrompt(subagentSystemPrompt(st, restrictedReg)),
 	)

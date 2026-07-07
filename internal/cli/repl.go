@@ -46,7 +46,7 @@ type REPL struct {
 	mcpMgr     *mcp.Manager
 	askMu      sync.Mutex
 	mu         sync.Mutex // 保护 planMode 等可变状态
-	planMode   bool        // 计划模式：agent 只规划不执行
+	planMode   bool       // 计划模式：agent 只规划不执行
 }
 
 // NewREPL 构造 REPL 实例。

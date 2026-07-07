@@ -13,3 +13,15 @@ coverage.txt
 
 # os
 .DS_Store
+
+# 用户实际配置（含密钥，不入库）
+.trae/config.yaml
+.trae/AGENTS.md
+.trae/sessions/
+.trae/trajectories/
+.trae/logs/
+.trae/permissions.json
+
+# 模板文件入库，实际配置不入库
+!.trae/config.example.yaml
+

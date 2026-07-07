@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/bytedance/trae-agent/internal/paths"
 	"gopkg.in/yaml.v3"
 )
 
@@ -38,7 +38,8 @@ func Load(opts LoadOptions) (Config, error) {
 
 	// 2. 项目级
 	if opts.ProjectDir != "" {
-		projPath := filepath.Join(opts.ProjectDir, ".trae", "config.yaml")
+		// 复用 paths 包统一管理项目级配置路径，消除重复的 filepath.Join 逻辑
+		projPath := paths.ProjectConfigPath(opts.ProjectDir)
 		if projCfg, err := loadYaml(projPath); err == nil {
 			merge(&cfg, projCfg)
 		} else if !os.IsNotExist(err) {
@@ -73,12 +74,10 @@ func Load(opts LoadOptions) (Config, error) {
 	return cfg, nil
 }
 
+// userConfigPath 委托给 paths.UserConfigPath，统一管理用户级配置路径，
+// 消除与 paths 包重复的 os.UserHomeDir + filepath.Join 逻辑。
 func userConfigPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("get home dir: %w", err)
-	}
-	return filepath.Join(home, ".trae", "config.yaml"), nil
+	return paths.UserConfigPath()
 }
 
 func loadYaml(path string) (Config, error) {

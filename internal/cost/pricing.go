@@ -19,11 +19,11 @@ var priceTable = map[string]Price{
 	"claude-3-opus":     {InputPerMillion: 15.0, OutputPerMillion: 75.0},
 	"claude-3-sonnet":   {InputPerMillion: 3.0, OutputPerMillion: 15.0},
 	"claude-3-haiku":    {InputPerMillion: 0.25, OutputPerMillion: 1.25},
-	"gpt-4o":      {InputPerMillion: 2.5, OutputPerMillion: 10.0},
-	"gpt-4o-mini": {InputPerMillion: 0.15, OutputPerMillion: 0.6},
-	"gpt-4-turbo": {InputPerMillion: 10.0, OutputPerMillion: 30.0},
-	"gpt-4":       {InputPerMillion: 30.0, OutputPerMillion: 60.0},
-	"gpt-3.5":     {InputPerMillion: 0.5, OutputPerMillion: 1.5},
+	"gpt-4o":            {InputPerMillion: 2.5, OutputPerMillion: 10.0},
+	"gpt-4o-mini":       {InputPerMillion: 0.15, OutputPerMillion: 0.6},
+	"gpt-4-turbo":       {InputPerMillion: 10.0, OutputPerMillion: 30.0},
+	"gpt-4":             {InputPerMillion: 30.0, OutputPerMillion: 60.0},
+	"gpt-3.5":           {InputPerMillion: 0.5, OutputPerMillion: 1.5},
 }
 
 // Estimate 根据模型名和 usage 估算费用（USD）。

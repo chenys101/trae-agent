@@ -15,8 +15,10 @@ type Grep struct{}
 
 func NewGrep() *Grep { return &Grep{} }
 
-func (Grep) Name() string        { return "grep" }
-func (Grep) Description() string { return "Search file contents with regex. Returns matches with file:line:content." }
+func (Grep) Name() string { return "grep" }
+func (Grep) Description() string {
+	return "Search file contents with regex. Returns matches with file:line:content."
+}
 
 func (Grep) Schema() json.RawMessage {
 	return json.RawMessage(`{

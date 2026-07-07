@@ -1,15 +1,15 @@
 package agent
 
 import (
-	"fmt"
 	"strings"
 )
 
-// BrandName 是 agent 自报的品牌名，可被外部覆盖（例如 fork 或白标场景）。
-var BrandName = "trae"
+// BrandName 是 agent 自报的品牌名。
+const BrandName = "trae"
 
-// SystemPrompt 是 agent 的系统提示词，引用 BrandName 以支持品牌定制。
-var SystemPrompt = fmt.Sprintf(`You are %s, a CLI coding agent. You help users with software engineering tasks by reading, writing, and modifying code, and executing commands.
+// defaultSystemPrompt 是基础系统提示词模板。
+// 直接内联品牌名 "trae"，避免运行时拼接产生的可变全局变量。
+const defaultSystemPrompt = `You are trae, a CLI coding agent. You help users with software engineering tasks by reading, writing, and modifying code, and executing commands.
 
 When you need to perform an action, call tools by issuing tool calls. Tools are provided via the tools parameter with their schemas. Read each tool's description to understand when and how to use it.
 
@@ -51,7 +51,13 @@ When the user includes thinking keywords in their request, allocate progressivel
 - "think harder" — thorough analysis, weigh trade-offs
 - "ultrathink" — exhaustive analysis, explore edge cases
 
-Higher levels mean you should spend more output on reasoning before taking actions. Always think before acting, but these keywords signal how much.`, BrandName)
+Higher levels mean you should spend more output on reasoning before taking actions. Always think before acting, but these keywords signal how much.`
+
+// SystemPrompt 返回基础系统提示词。
+// 用函数替代包级变量，消除并发读写风险；调用方拿到的是不可变字符串副本。
+func SystemPrompt() string {
+	return defaultSystemPrompt
+}
 
 // thinkingBudgets 将思考关键词映射到 maxTokens 提升（给更多输出空间用于推理）。
 // 0 表示不额外增加。
@@ -86,7 +92,7 @@ const PlanModePrefix = `[Plan Mode] You are in plan mode. Analyze the request an
 // memory 为空时直接返回基础 prompt。
 func BuildSystemPrompt(memory string) string {
 	if memory == "" {
-		return SystemPrompt
+		return defaultSystemPrompt
 	}
-	return SystemPrompt + "\n\n## Project Context\n\n" + memory
+	return defaultSystemPrompt + "\n\n## Project Context\n\n" + memory
 }

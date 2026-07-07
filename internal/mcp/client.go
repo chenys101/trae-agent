@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/bytedance/trae-agent/internal/consts"
 )
 
 // Client 管理 MCP server 子进程，通过 stdio 通信。
@@ -50,7 +52,7 @@ func (c *Client) Start(ctx context.Context, command string, args []string, env [
 	c.stdout = stdout
 	c.scanner = bufio.NewScanner(stdout)
 	// 增大 buffer，MCP 消息可能较大
-	c.scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	c.scanner.Buffer(make([]byte, 0, consts.ScannerInitialBuf), consts.ScannerMaxBuf)
 
 	if err := c.cmd.Start(); err != nil {
 		return fmt.Errorf("start process: %w", err)
@@ -172,7 +174,7 @@ func (c *Client) request(ctx context.Context, method string, params json.RawMess
 		return resp, nil
 	case <-ctx.Done():
 		return Response{}, ctx.Err()
-	case <-time.After(30 * time.Second):
+	case <-time.After(consts.MCPRPCTimeout):
 		return Response{}, fmt.Errorf("request timeout: %s", method)
 	}
 }
@@ -242,7 +244,7 @@ func (c *Client) Close() error {
 	}()
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(consts.MCPGracefulCloseTimeout):
 		c.kill()
 		<-done
 	}

@@ -54,8 +54,8 @@ func NewInitCmd() *Command {
 				)}
 			}
 			return CommandResult{
-				Message:     "[analyzing project and generating .trae/AGENTS.md...]",
-				AgentInput:  initPromptTemplate,
+				Message:    "[analyzing project and generating .trae/AGENTS.md...]",
+				AgentInput: initPromptTemplate,
 			}
 		},
 	}
@@ -88,4 +88,3 @@ func RunInit(ctx context.Context, a *agent.Agent) (string, error) {
 	}
 	return path, nil
 }
-

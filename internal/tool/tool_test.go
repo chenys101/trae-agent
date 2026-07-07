@@ -8,11 +8,15 @@ import (
 
 type echoTool struct{}
 
-func (echoTool) Name() string             { return "echo" }
-func (echoTool) Description() string      { return "echo back the input" }
-func (echoTool) Schema() json.RawMessage  { return json.RawMessage(`{"type":"object","properties":{"msg":{"type":"string"}}}`) }
+func (echoTool) Name() string        { return "echo" }
+func (echoTool) Description() string { return "echo back the input" }
+func (echoTool) Schema() json.RawMessage {
+	return json.RawMessage(`{"type":"object","properties":{"msg":{"type":"string"}}}`)
+}
 func (echoTool) Run(ctx context.Context, args json.RawMessage) Result {
-	var v struct{ Msg string `json:"msg"` }
+	var v struct {
+		Msg string `json:"msg"`
+	}
 	json.Unmarshal(args, &v)
 	return Result{Content: v.Msg}
 }

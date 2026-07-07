@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/bytedance/trae-agent/internal/consts"
 	"github.com/bytedance/trae-agent/internal/util"
 )
 
@@ -13,8 +14,10 @@ type Edit struct{}
 
 func NewEdit() *Edit { return &Edit{} }
 
-func (Edit) Name() string        { return "edit" }
-func (Edit) Description() string { return "Replace a unique string in a file. Errors if old_string is not found or not unique (unless replace_all)." }
+func (Edit) Name() string { return "edit" }
+func (Edit) Description() string {
+	return "Replace a unique string in a file. Errors if old_string is not found or not unique (unless replace_all)."
+}
 
 func (Edit) Schema() json.RawMessage {
 	return json.RawMessage(`{
@@ -56,8 +59,8 @@ func (Edit) Run(ctx context.Context, args json.RawMessage) Result {
 		}
 		return ErrorResult("stat file: %v", err)
 	}
-	if info.Size() > maxFileSize {
-		return ErrorResult("file too large (%d bytes, max %d)", info.Size(), maxFileSize)
+	if info.Size() > consts.MaxFileSize {
+		return ErrorResult("file too large (%d bytes, max %d)", info.Size(), consts.MaxFileSize)
 	}
 
 	data, err := os.ReadFile(a.FilePath)

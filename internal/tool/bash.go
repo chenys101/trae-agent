@@ -9,13 +9,9 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/bytedance/trae-agent/internal/consts"
 )
-
-// maxBashOutput bash 输出上限（1MB），超过截断并附加提示。
-const maxBashOutput = 1 << 20
-
-// maxBashTimeoutMs bash 超时上限（600s），超过拒绝以避免长时间挂起。
-const maxBashTimeoutMs = 600000
 
 type Bash struct {
 	defaultTimeout time.Duration
@@ -23,7 +19,8 @@ type Bash struct {
 
 func NewBash(defaultTimeout time.Duration) *Bash {
 	if defaultTimeout <= 0 {
-		defaultTimeout = 120 * time.Second
+		// 未传超时时回退到 consts 中定义的默认值，避免魔法数字散落
+		defaultTimeout = consts.DefaultBashTimeout
 	}
 	return &Bash{defaultTimeout: defaultTimeout}
 }
@@ -75,8 +72,8 @@ func (b *Bash) Run(ctx context.Context, args json.RawMessage) Result {
 		return ErrorResult("command is required")
 	}
 
-	if a.TimeoutMs > maxBashTimeoutMs {
-		return ErrorResult("timeout_ms too large (max %dms)", maxBashTimeoutMs)
+	if a.TimeoutMs > consts.MaxBashTimeoutMs {
+		return ErrorResult("timeout_ms too large (max %dms)", consts.MaxBashTimeoutMs)
 	}
 	timeout := b.defaultTimeout
 	if a.TimeoutMs > 0 {
@@ -104,7 +101,7 @@ func (b *Bash) Run(ctx context.Context, args json.RawMessage) Result {
 
 	// 用 LimitWriter 限制输出大小，避免无限输出命令导致 OOM
 	var buf bytes.Buffer
-	limited := &limitedWriter{w: &buf, max: maxBashOutput}
+	limited := &limitedWriter{w: &buf, max: consts.MaxBashOutput}
 	cmd.Stdout = limited
 	cmd.Stderr = limited
 

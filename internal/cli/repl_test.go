@@ -18,8 +18,8 @@ import (
 // cliMockProvider 测试用 mock provider。
 // streamErr 非 nil 时 Stream 直接返回错误；否则按 script 发送事件。
 type cliMockProvider struct {
-	streamErr error              // Stream 返回的错误
-	script    []llm.StreamEvent  // 发送的事件序列
+	streamErr error             // Stream 返回的错误
+	script    []llm.StreamEvent // 发送的事件序列
 }
 
 func (m *cliMockProvider) Name() string { return "mock" }

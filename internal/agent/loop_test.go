@@ -129,7 +129,9 @@ func (testEchoTool) Name() string            { return "echo" }
 func (testEchoTool) Description() string     { return "echo" }
 func (testEchoTool) Schema() json.RawMessage { return json.RawMessage(`{}`) }
 func (testEchoTool) Run(ctx context.Context, args json.RawMessage) tool.Result {
-	var v struct{ Msg string `json:"msg"` }
+	var v struct {
+		Msg string `json:"msg"`
+	}
 	json.Unmarshal(args, &v)
 	return tool.Result{Content: v.Msg}
 }
@@ -150,7 +152,10 @@ func TestAgent_maxStepsExceeded(t *testing.T) {
 	a := New(provider, registry, WithMaxSteps(2))
 
 	events := make(chan Event, 20)
-	go func() { for range events {} }() // 排空 events，避免发送阻塞
+	go func() {
+		for range events {
+		}
+	}() // 排空 events，避免发送阻塞
 
 	err := a.Run(context.Background(), "call echo", events)
 	if err == nil {
@@ -212,7 +217,10 @@ func TestAgent_toolResultAppendedToHistory(t *testing.T) {
 		{Role: llm.RoleUser, Content: "call echo"},
 	}
 	events := make(chan Event, 20)
-	go func() { for range events {} }() // 排空 events
+	go func() {
+		for range events {
+		}
+	}() // 排空 events
 
 	if err := a.RunWithHistory(context.Background(), &messages, events); err != nil {
 		t.Fatalf("RunWithHistory returned error: %v", err)
@@ -253,7 +261,10 @@ func TestAgent_streamErrorWrapped(t *testing.T) {
 	a := New(provider, registry, WithMaxSteps(5))
 
 	events := make(chan Event, 10)
-	go func() { for range events {} }() // 排空 events
+	go func() {
+		for range events {
+		}
+	}() // 排空 events
 
 	err := a.Run(context.Background(), "hi", events)
 	if err == nil {
@@ -290,7 +301,10 @@ func TestAgent_toolCallMultiDeltaAccumulated(t *testing.T) {
 		{Role: llm.RoleUser, Content: "call echo"},
 	}
 	events := make(chan Event, 20)
-	go func() { for range events {} }() // 排空 events
+	go func() {
+		for range events {
+		}
+	}() // 排空 events
 
 	if err := a.RunWithHistory(context.Background(), &messages, events); err != nil {
 		t.Fatalf("RunWithHistory returned error: %v", err)

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/bytedance/trae-agent/internal/errors"
+	"github.com/bytedance/trae-agent/internal/paths"
 	"github.com/bytedance/trae-agent/internal/util"
 )
 
@@ -15,13 +17,10 @@ type Store struct {
 
 // NewStore 创建存储实例，路径为用户主目录下 .trae/permissions.json。
 func NewStore() (*Store, error) {
-	home, err := os.UserHomeDir()
+	dir, err := paths.TraeDir()
 	if err != nil {
-		return nil, err
-	}
-	dir := filepath.Join(home, ".trae")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
+		// .trae 目录创建失败
+		return nil, errors.Wrap(err, errors.CodeConfigLoad, "create .trae dir")
 	}
 	return &Store{path: filepath.Join(dir, "permissions.json")}, nil
 }
@@ -36,6 +35,7 @@ func (s *Store) Load() (*DefaultPolicy, error) {
 	p := NewPolicy()
 	data, err := os.ReadFile(s.path)
 	if err != nil {
+		// 文件不存在时返回空策略（含内置规则），保留 os.IsNotExist 判断
 		if os.IsNotExist(err) {
 			return p, nil
 		}
@@ -43,7 +43,7 @@ func (s *Store) Load() (*DefaultPolicy, error) {
 	}
 	var rules []Rule
 	if err := json.Unmarshal(data, &rules); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, errors.CodeConfigLoad, "unmarshal permissions")
 	}
 	for _, r := range rules {
 		p.AddUserRule(r)
@@ -56,8 +56,11 @@ func (s *Store) Save(p *DefaultPolicy) error {
 	rules := p.UserRules()
 	data, err := json.MarshalIndent(rules, "", "  ")
 	if err != nil {
-		return err
+		return errors.Wrap(err, errors.CodeConfigLoad, "marshal permissions")
 	}
 	// 原子写入：先写临时文件再 rename，Windows 上 rename 失败时回退到直接写入
-	return util.AtomicWrite(s.path, data, 0o600)
+	if err := util.AtomicWrite(s.path, data, 0o600); err != nil {
+		return errors.Wrap(err, errors.CodeConfigLoad, "write permissions")
+	}
+	return nil
 }

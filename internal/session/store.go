@@ -10,7 +10,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/bytedance/trae-agent/internal/errors"
 	"github.com/bytedance/trae-agent/internal/llm"
+	"github.com/bytedance/trae-agent/internal/paths"
 	"github.com/bytedance/trae-agent/internal/util"
 )
 
@@ -33,14 +35,11 @@ type Store struct {
 }
 
 func NewStore() (*Store, error) {
-	home, err := os.UserHomeDir()
+	// 会话目录位于 ~/.trae/sessions/，由 paths 包统一创建（含 .trae 父目录）
+	// 文件内容可能含敏感信息（prompt、粘贴的代码/密钥），保存时权限收紧为 0600（见 Save）
+	dir, err := paths.UnderTrae("sessions")
 	if err != nil {
-		return nil, fmt.Errorf("get home dir: %w", err)
-	}
-	dir := filepath.Join(home, ".trae", "sessions")
-	// 会话内容可能含敏感信息（prompt、粘贴的代码/密钥），权限收紧为 0700
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("create sessions dir: %w", err)
+		return nil, err
 	}
 	return &Store{dir: dir}, nil
 }
@@ -68,12 +67,12 @@ func (s *Store) Save(sess *Session) error {
 	}
 	data, err := json.MarshalIndent(sess, "", "  ")
 	if err != nil {
-		return err
+		return errors.Wrap(err, errors.CodeSessionSave, "marshal session")
 	}
 	path := filepath.Join(s.dir, sess.ID+".json")
 	// 原子写入：先写临时文件再 rename，Windows 上 rename 失败时回退到直接写入
 	if err := util.AtomicWrite(path, data, 0o600); err != nil {
-		return fmt.Errorf("write session file: %w", err)
+		return errors.Wrap(err, errors.CodeSessionSave, "write session")
 	}
 	return nil
 }
@@ -100,11 +99,12 @@ func (s *Store) Load(id string) (*Session, error) {
 	path := filepath.Join(s.dir, id+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
+		// 文件不存在等读取错误保持原样返回，保留 os.IsNotExist 判断能力
 		return nil, err
 	}
 	var sess Session
 	if err := json.Unmarshal(data, &sess); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, errors.CodeSessionLoad, "unmarshal session")
 	}
 	return &sess, nil
 }
@@ -113,7 +113,7 @@ func (s *Store) Load(id string) (*Session, error) {
 func (s *Store) List() ([]*Session, error) {
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, errors.CodeSessionLoad, "list sessions")
 	}
 	var sessions []*Session
 	for _, entry := range entries {

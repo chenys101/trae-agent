@@ -50,7 +50,7 @@ func New(provider llm.Provider, registry *tool.Registry, opts ...Option) *Agent 
 	a := &Agent{
 		provider:     provider,
 		maxSteps:     20,
-		systemPrompt: SystemPrompt, // 默认用 prompt.go 的 SystemPrompt
+		systemPrompt: SystemPrompt(), // 默认用 prompt.go 的 SystemPrompt
 	}
 	for _, o := range opts {
 		o(a)

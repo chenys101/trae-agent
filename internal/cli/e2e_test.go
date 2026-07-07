@@ -47,7 +47,7 @@ func TestE2E_toolLoop(t *testing.T) {
 		tool.NewRead(),
 		tool.NewWrite(),
 		tool.NewEdit(),
-		tool.NewBash(10 * time.Second),
+		tool.NewBash(10*time.Second),
 	)
 	a := agent.New(provider, registry, agent.WithMaxSteps(10), agent.WithModel("test-model"))
 

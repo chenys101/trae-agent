@@ -69,9 +69,9 @@ type slowTool struct {
 	calls int32
 }
 
-func (s *slowTool) Name() string             { return "slow" }
-func (s *slowTool) Description() string      { return "slow tool" }
-func (s *slowTool) Schema() json.RawMessage  { return json.RawMessage(`{}`) }
+func (s *slowTool) Name() string            { return "slow" }
+func (s *slowTool) Description() string     { return "slow tool" }
+func (s *slowTool) Schema() json.RawMessage { return json.RawMessage(`{}`) }
 func (s *slowTool) Run(ctx context.Context, args json.RawMessage) Result {
 	atomic.AddInt32(&s.calls, 1)
 	time.Sleep(s.delay)

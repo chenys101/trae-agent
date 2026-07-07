@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/bytedance/trae-agent/internal/consts"
 	"github.com/bytedance/trae-agent/internal/util"
 )
 
@@ -13,8 +14,10 @@ type Write struct{}
 
 func NewWrite() *Write { return &Write{} }
 
-func (Write) Name() string        { return "write" }
-func (Write) Description() string { return "Write content to a file, creating parent dirs if needed. Overwrites existing content." }
+func (Write) Name() string { return "write" }
+func (Write) Description() string {
+	return "Write content to a file, creating parent dirs if needed. Overwrites existing content."
+}
 
 func (Write) Schema() json.RawMessage {
 	return json.RawMessage(`{
@@ -40,8 +43,8 @@ func (Write) Run(ctx context.Context, args json.RawMessage) Result {
 	if a.FilePath == "" {
 		return ErrorResult("file_path is required")
 	}
-	if len(a.Content) > maxFileSize {
-		return ErrorResult("content too large (%d bytes, max %d)", len(a.Content), maxFileSize)
+	if len(a.Content) > consts.MaxFileSize {
+		return ErrorResult("content too large (%d bytes, max %d)", len(a.Content), consts.MaxFileSize)
 	}
 
 	dir := filepath.Dir(a.FilePath)

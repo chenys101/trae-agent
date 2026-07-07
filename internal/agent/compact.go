@@ -56,7 +56,7 @@ func (c *Compactor) Compact(ctx context.Context, messages []llm.Message) ([]llm.
 	// 出现连续 user，或 recent[0] 是 tool 时出现 user→tool 非法序列
 	result := make([]llm.Message, 0, len(recent)+2)
 	result = append(result, llm.Message{
-		Role: llm.RoleUser,
+		Role:    llm.RoleUser,
 		Content: fmt.Sprintf("[Previous conversation summary]\n%s\n[End of summary. Continue from here.]", summary),
 	})
 	result = append(result, llm.Message{Role: llm.RoleAssistant, Content: "Understood. I'll continue from the summarized context."})
@@ -133,7 +133,10 @@ func (c *Compactor) summarize(ctx context.Context, messages []llm.Message) (stri
 			// 摘要完成，继续等 channel 关闭
 		case llm.Error:
 			// 排空 channel，避免发送 goroutine 阻塞泄漏
-			go func() { for range ch {} }()
+			go func() {
+				for range ch {
+				}
+			}()
 			return "", e.Err
 		}
 	}

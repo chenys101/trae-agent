@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/bytedance/trae-agent/internal/consts"
 	"github.com/bytedance/trae-agent/internal/permission"
 )
 
@@ -59,9 +60,9 @@ func (d *Dispatcher) SetAsker(a permission.Asker) {
 func (d *Dispatcher) Dispatch(ctx context.Context, calls []Call) []CallResult {
 	results := make([]CallResult, len(calls))
 	var wg sync.WaitGroup
-	// 用带缓冲 channel 作为 semaphore，限制最多 8 个并发 goroutine，
+	// 用带缓冲 channel 作为 semaphore，限制最多 consts.ToolConcurrency 个并发 goroutine，
 	// 避免一次性派生过多 goroutine 导致资源耗尽。
-	sem := make(chan struct{}, 8)
+	sem := make(chan struct{}, consts.ToolConcurrency)
 	for i, c := range calls {
 		wg.Add(1)
 		sem <- struct{}{}

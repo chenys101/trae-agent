@@ -26,10 +26,10 @@ type Decision struct {
 
 // Rule 单条权限规则。
 type Rule struct {
-	Tool   string   `json:"tool"`   // 工具名，"*" 匹配所有
-	Args   []string `json:"args"`   // 关键参数子串匹配（AND 关系），空则不检查 args
+	Tool   string   `json:"tool"` // 工具名，"*" 匹配所有
+	Args   []string `json:"args"` // 关键参数子串匹配（AND 关系），空则不检查 args
 	Action Action   `json:"action"`
-	Desc   string   `json:"desc"`   // 规则描述
+	Desc   string   `json:"desc"` // 规则描述
 }
 
 // Policy 权限策略接口。

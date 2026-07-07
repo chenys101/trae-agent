@@ -1,0 +1,41 @@
+# trae-agent 配置模板
+# 复制此文件为 config.yaml 并填入你的配置
+# 配置加载优先级：默认 < 用户级(~/.trae/config.yaml) < 项目级(.trae/config.yaml) < 环境变量 < 命令行 flag
+
+# 默认 LLM provider，对应 model_providers 中的键名
+default_provider: anthropic
+
+# 日志级别：debug / info / warn / error
+log_level: info
+
+# agent 最大步数（单次对话中工具调用的最大轮次）
+max_steps: 20
+
+# LLM provider 配置，支持多个 provider
+model_providers:
+  # Anthropic Claude
+  anthropic:
+    provider: anthropic
+    api_key: "your-anthropic-api-key"
+    # 可选：自定义 base URL
+    # base_url: "https://api.anthropic.com"
+    default_model: "claude-sonnet-4-20250514"
+    max_tokens: 8192
+    temperature: 0
+
+  # OpenAI / 兼容接口（如 DeepSeek、通义千问等）
+  openai:
+    provider: openai
+    api_key: "your-openai-api-key"
+    # 可选：自定义 base URL（用于 OpenAI 兼容接口）
+    # base_url: "https://api.openai.com/v1"
+    default_model: "gpt-4o"
+    max_tokens: 8192
+    temperature: 0
+
+# MCP server 配置（可选）
+# mcp_servers:
+#   filesystem:
+#     command: "npx"
+#     args: ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"]
+#     env: []

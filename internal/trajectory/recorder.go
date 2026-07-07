@@ -10,18 +10,19 @@ import (
 
 	"github.com/bytedance/trae-agent/internal/agent"
 	"github.com/bytedance/trae-agent/internal/llm"
+	"github.com/bytedance/trae-agent/internal/paths"
 )
 
 // Record 单条轨迹记录，对应一个 agent 事件。
 type Record struct {
-	Timestamp   string           `json:"ts"`
-	Type        string           `json:"type"`
-	Text        string           `json:"text,omitempty"`
-	ToolName    string           `json:"tool_name,omitempty"`
-	ToolArgs    string           `json:"tool_args,omitempty"`
-	ToolResult  json.RawMessage  `json:"tool_result,omitempty"`
-	IsError     bool             `json:"is_error,omitempty"`
-	Usage       *llm.Usage       `json:"usage,omitempty"`
+	Timestamp  string          `json:"ts"`
+	Type       string          `json:"type"`
+	Text       string          `json:"text,omitempty"`
+	ToolName   string          `json:"tool_name,omitempty"`
+	ToolArgs   string          `json:"tool_args,omitempty"`
+	ToolResult json.RawMessage `json:"tool_result,omitempty"`
+	IsError    bool            `json:"is_error,omitempty"`
+	Usage      *llm.Usage      `json:"usage,omitempty"`
 }
 
 // Recorder JSONL 格式轨迹记录器。
@@ -96,11 +97,12 @@ func (r *Recorder) eventToRecord(ev agent.Event) Record {
 	return rec
 }
 
-// DefaultPath 返回默认轨迹文件路径。
+// DefaultPath 返回默认轨迹文件路径（用户主目录下 .trae/trajectories/）。
 func DefaultPath(sessionID string) string {
-	home, err := os.UserHomeDir()
+	p, err := paths.UnderTrae("trajectories", sessionID+".jsonl")
 	if err != nil {
-		home = "."
+		// 极端情况：无法创建目录，回退到当前目录
+		return sessionID + ".jsonl"
 	}
-	return filepath.Join(home, ".trae", "trajectories", sessionID+".jsonl")
+	return p
 }

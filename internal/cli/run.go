@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
-	"time"
 
 	"github.com/bytedance/trae-agent/internal/agent"
 	"github.com/bytedance/trae-agent/internal/config"
+	"github.com/bytedance/trae-agent/internal/consts"
 	"github.com/bytedance/trae-agent/internal/cost"
+	"github.com/bytedance/trae-agent/internal/errors"
 	"github.com/bytedance/trae-agent/internal/llm"
 	"github.com/bytedance/trae-agent/internal/mcp"
 	"github.com/bytedance/trae-agent/internal/permission"
@@ -19,11 +21,6 @@ import (
 	"github.com/bytedance/trae-agent/internal/trajectory"
 	"github.com/spf13/cobra"
 )
-
-const defaultMaxRetries = 3
-const defaultRetryBaseDelay = 500 * time.Millisecond
-const defaultBashTimeout = 120 * time.Second
-const defaultMaxStepsFallback = 20
 
 // buildAgent 根据 config 与 flag 构造 agent 实例，供 run / interactive 共享。
 // 同时返回权限策略、权限存储、MCP 管理器，供调用方管理生命周期。
@@ -35,12 +32,12 @@ func buildAgent(ctx context.Context, cfg config.Config, providerFlag, modelFlag 
 		providerName = cfg.DefaultProvider
 	}
 	if providerName == "" {
-		return nil, nil, nil, nil, fmt.Errorf("no provider specified: set default_provider in config or use --provider")
+		return nil, nil, nil, nil, errors.New(errors.CodeConfigLoad, "no provider specified: set default_provider in config or use --provider")
 	}
 
 	provCfg, ok := cfg.Providers[providerName]
 	if !ok {
-		return nil, nil, nil, nil, fmt.Errorf("provider %q not found in config", providerName)
+		return nil, nil, nil, nil, errors.Newf(errors.CodeConfigLoad, "provider %q not found in config", providerName)
 	}
 
 	providerType := provCfg.Provider
@@ -51,7 +48,7 @@ func buildAgent(ctx context.Context, cfg config.Config, providerFlag, modelFlag 
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	llmProvider = llm.NewRetryable(llmProvider, defaultMaxRetries, defaultRetryBaseDelay)
+	llmProvider = llm.NewRetryable(llmProvider, consts.DefaultMaxRetries, consts.DefaultRetryBaseDelay)
 
 	// 权限策略：从持久化存储加载
 	permStore, err := permission.NewStore()
@@ -76,8 +73,9 @@ func buildAgent(ctx context.Context, cfg config.Config, providerFlag, modelFlag 
 			mcpCfg[name] = mcp.ServerConfig{Command: sc.Command, Args: sc.Args, Env: sc.Env}
 		}
 		errs := mcpMgr.StartAll(ctx, mcpCfg)
+		// errs 中每个 error 已由 StartAll 包装为 "server %s: %w"，server 名内嵌于消息
 		for _, e := range errs {
-			fmt.Fprintf(os.Stderr, "[mcp] %v\n", e)
+			slog.Warn("mcp server failed", "err", e)
 		}
 	}
 
@@ -88,7 +86,7 @@ func buildAgent(ctx context.Context, cfg config.Config, providerFlag, modelFlag 
 		tool.NewEdit(),
 		tool.NewGlob(),
 		tool.NewGrep(),
-		tool.NewBash(defaultBashTimeout),
+		tool.NewBash(consts.DefaultBashTimeout),
 		tool.NewTodo(),
 	}
 	baseTools = append(baseTools, mcpMgr.Tools()...)
@@ -104,7 +102,7 @@ func buildAgent(ctx context.Context, cfg config.Config, providerFlag, modelFlag 
 
 	maxSteps := cfg.MaxSteps
 	if maxSteps == 0 {
-		maxSteps = defaultMaxStepsFallback
+		maxSteps = consts.DefaultMaxSteps
 	}
 	// headless 默认 AutoAsker deny；interactive 模式由 REPL 覆盖
 	a := agent.New(llmProvider, fullRegistry,
@@ -154,7 +152,7 @@ func NewRunCmd() *cobra.Command {
 			if trajectoryFlag {
 				rec, err := trajectory.NewRecorder(trajectory.DefaultPath(session.GenerateID()))
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "[trajectory] init failed: %v\n", err)
+					slog.Warn("trajectory init failed", "err", err)
 				} else {
 					defer rec.Close()
 					usage, renderErr = renderWithTrajectory(events, cmd.OutOrStdout(), rec)

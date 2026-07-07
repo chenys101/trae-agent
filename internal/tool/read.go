@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/bytedance/trae-agent/internal/consts"
 )
 
 type Read struct{}
@@ -50,8 +52,8 @@ func (Read) Run(ctx context.Context, args json.RawMessage) Result {
 		}
 		return ErrorResult("stat file: %v", err)
 	}
-	if info.Size() > maxFileSize {
-		return ErrorResult("file too large (%d bytes, max %d): %s", info.Size(), maxFileSize, a.FilePath)
+	if info.Size() > consts.MaxFileSize {
+		return ErrorResult("file too large (%d bytes, max %d): %s", info.Size(), consts.MaxFileSize, a.FilePath)
 	}
 
 	data, err := os.ReadFile(a.FilePath)

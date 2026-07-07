@@ -5,8 +5,9 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
+
+	"github.com/bytedance/trae-agent/internal/paths"
 )
 
 // Logger 是日志接口，包装 slog.Logger 的常用方法。
@@ -64,16 +65,12 @@ func InitWithWriter(w io.Writer, level string) (Logger, error) {
 // Init 初始化 logger，写文件到用户主目录下 .trae/logs/trae.log。
 // level: debug / info / warn / error（大小写不敏感）
 func Init(level string) (Logger, error) {
-	home, err := os.UserHomeDir()
+	// 用 paths 包统一管理 .trae 目录路径
+	logPath, err := paths.UnderTrae("logs", "trae.log")
 	if err != nil {
-		return nil, fmt.Errorf("get home dir: %w", err)
-	}
-	logDir := filepath.Join(home, ".trae", "logs")
-	if err := os.MkdirAll(logDir, 0o755); err != nil {
-		return nil, fmt.Errorf("create log dir: %w", err)
+		return nil, fmt.Errorf("resolve log path: %w", err)
 	}
 
-	logPath := filepath.Join(logDir, "trae.log")
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open log file: %w", err)
