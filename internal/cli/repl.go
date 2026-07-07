@@ -1,15 +1,18 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
 
 	"github.com/bytedance/trae-agent/internal/agent"
+	"github.com/bytedance/trae-agent/internal/consts"
 	"github.com/bytedance/trae-agent/internal/errors"
 	"github.com/bytedance/trae-agent/internal/llm"
 	"github.com/bytedance/trae-agent/internal/mcp"
@@ -50,6 +53,10 @@ type REPL struct {
 	askMu      sync.Mutex
 	mu         sync.Mutex // 保护 planMode 等可变状态
 	planMode   bool       // 计划模式：agent 只规划不执行
+	// fallback 输入：readline 不兼容（如 Git Bash/mintty）时用 bufio.Scanner
+	// 读取 stdin。out 为输出目标，scanner 为 nil 表示使用 readline。
+	out     io.Writer
+	scanner *bufio.Scanner
 }
 
 // NewREPL 构造 REPL 实例。
@@ -76,26 +83,67 @@ func NewREPL(a *agent.Agent, policy *permission.DefaultPolicy, permStore *permis
 	return r, nil
 }
 
+// stdout 返回当前输出目标。优先 r.out，其次 readline.Stdout()，最后 os.Stdout。
+// fallback(scanner)模式下 r.rl 为 nil，用 r.out（=os.Stdout）。
+func (r *REPL) stdout() io.Writer {
+	if r.out != nil {
+		return r.out
+	}
+	if r.rl != nil {
+		return r.rl.Stdout()
+	}
+	return os.Stdout
+}
+
+// readLine 统一读取一行输入。
+// readline 模式用 r.rl.Readline()；fallback 模式用 r.scanner。
+// 返回的 err 为 io.EOF 表示用户结束输入。
+func (r *REPL) readLine() (string, error) {
+	if r.scanner != nil {
+		// fallback 模式：先打印提示符，再扫描一行
+		fmt.Fprint(r.stdout(), "trae> ")
+		if !r.scanner.Scan() {
+			if err := r.scanner.Err(); err != nil {
+				return "", err
+			}
+			return "", io.EOF
+		}
+		return r.scanner.Text(), nil
+	}
+	return r.rl.Readline()
+}
+
 // Ask 实现 permission.Asker 接口。
 func (r *REPL) Ask(ctx context.Context, tool, args, reason string) permission.Action {
 	r.askMu.Lock()
 	defer r.askMu.Unlock()
 
-	out := r.rl.Stdout()
+	out := r.stdout()
 	fmt.Fprintf(out, "\n\033[33m[permission]\033[0m tool=%s\n", tool)
 	fmt.Fprintf(out, "  reason: %s\n", reason)
-	if len(args) > 200 {
-		args = args[:200] + "..."
+	if len(args) > consts.ArgsDisplayLimit {
+		args = args[:consts.ArgsDisplayLimit] + "..."
 	}
 	fmt.Fprintf(out, "  args: %s\n", args)
 	fmt.Fprintf(out, "  allow? [y]es / [n]o / [a]lways-yes / [d]always-no: ")
 
-	oldPrompt := r.rl.Config.Prompt
-	r.rl.SetPrompt("")
-	line, err := r.rl.Readline()
-	r.rl.SetPrompt(oldPrompt)
-	if err != nil {
-		return permission.ActionDeny
+	// readline 模式：临时清空提示符读取确认；fallback 模式直接用 scanner 读一行。
+	// 注意：fallback 模式不调用 readLine（会打印 "trae> "），因为上面已打印 "allow?" 提示。
+	var line string
+	if r.scanner == nil && r.rl != nil {
+		oldPrompt := r.rl.Config.Prompt
+		r.rl.SetPrompt("")
+		rl, rerr := r.rl.Readline()
+		r.rl.SetPrompt(oldPrompt)
+		if rerr != nil {
+			return permission.ActionDeny
+		}
+		line = rl
+	} else if r.scanner != nil {
+		if !r.scanner.Scan() {
+			return permission.ActionDeny
+		}
+		line = r.scanner.Text()
 	}
 
 	switch strings.TrimSpace(strings.ToLower(line)) {
@@ -133,11 +181,16 @@ func (r *REPL) persistRule(tool, args string, action permission.Action) {
 
 // Run 启动 REPL 主循环，阻塞直到用户退出。
 func (r *REPL) Run(ctx context.Context) error {
+	// realTTY 标记当前 os.Stdin 是否为真实终端。
+	// 用于区分"真实终端下 readline 不兼容"（需 fallback）与
+	// "测试 mock readline 立即 EOF"（应正常退出，不 fallback）。
+	realTTY := isTerminal(os.Stdin.Fd())
+
 	// 测试可注入 r.rl，跳过 readline 初始化与 TTY 检测
-	if r.rl == nil {
+	if r.rl == nil && r.scanner == nil {
 		// 非交互环境（管道/CI/重定向）下 readline 会立即收到 EOF，
 		// 导致 "bye" 后静默退出，体验差。此处显式检测并给出引导。
-		if !isTerminal(os.Stdin.Fd()) {
+		if !realTTY {
 			return errors.New(errors.CodeInvalidArg,
 				"interactive 模式需要终端(TTY)，但当前 stdin 不是终端。\n"+
 					"可能原因：通过管道、重定向或 IDE 输出窗口运行。\n"+
@@ -150,10 +203,13 @@ func (r *REPL) Run(ctx context.Context) error {
 			EOFPrompt:       "exit",
 		})
 		if err != nil {
-			return fmt.Errorf("init readline: %w", err)
+			// readline 初始化失败（如 mintty 下），降级到 scanner
+			slog.Warn("readline init failed, fallback to scanner", "err", err)
+			r.initScannerFallback()
+		} else {
+			defer rl.Close()
+			r.rl = rl
 		}
-		defer rl.Close()
-		r.rl = rl
 	}
 	r.ctx = ctx
 	// 统一在退出时保存会话，覆盖所有退出路径（EOF / ErrInterrupt / /exit / readline error）
@@ -163,9 +219,19 @@ func (r *REPL) Run(ctx context.Context) error {
 
 	interrupter := NewInterruptHandler()
 
+	readCount := 0
 	for {
-		line, err := r.rl.Readline()
+		line, err := r.readLine()
 		if err == io.EOF {
+			// 首次读取即 EOF 且从未成功输入，且当前是真实终端：
+			// 说明 readline 与终端不兼容（如 Git Bash/mintty），降级到 scanner。
+			// 测试环境（realTTY=false）不触发 fallback，直接退出。
+			if readCount == 0 && r.scanner == nil && r.rl != nil && realTTY {
+				r.println("\n[当前终端与 readline 不兼容（常见于 Git Bash/mintty），已切换到简化输入模式]")
+				r.println("[提示：行编辑/历史/补全不可用，但对话功能正常。推荐使用 Windows Terminal/cmd 获得完整体验]")
+				r.initScannerFallback()
+				continue
+			}
 			r.println("bye")
 			return nil
 		}
@@ -181,6 +247,7 @@ func (r *REPL) Run(ctx context.Context) error {
 		}
 
 		interrupter.Reset()
+		readCount++
 
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -201,6 +268,19 @@ func (r *REPL) Run(ctx context.Context) error {
 
 		r.runAgent(ctx, line, interrupter)
 	}
+}
+
+// initScannerFallback 关闭 readline，切换到 bufio.Scanner 读取 stdin。
+// 用于 readline 不兼容的终端（Git Bash/mintty）。
+func (r *REPL) initScannerFallback() {
+	if r.rl != nil {
+		r.rl.Close()
+		r.rl = nil
+	}
+	r.scanner = bufio.NewScanner(os.Stdin)
+	// 增大 buffer，支持长输入
+	r.scanner.Buffer(make([]byte, 0, consts.ScannerInitialBuf), consts.ScannerMaxBuf)
+	r.out = os.Stdout
 }
 
 func (r *REPL) runAgent(ctx context.Context, userInput string, interrupter *InterruptHandler) {
@@ -233,7 +313,7 @@ func (r *REPL) runAgent(ctx context.Context, userInput string, interrupter *Inte
 		errCh <- r.agent.RunWithHistory(agentCtx, &pendingMessages, events)
 	}()
 
-	usage, renderErr := r.renderer.Render(events, r.rl.Stdout())
+	usage, renderErr := r.renderer.Render(events, r.stdout())
 	if renderErr != nil {
 		r.println("error: " + renderErr.Error())
 		// 等待 goroutine 结束，避免后续对 pendingMessages 的写竞争
@@ -299,7 +379,7 @@ func (r *REPL) saveSession() {
 }
 
 func (r *REPL) println(s string) {
-	fmt.Fprintln(r.rl.Stdout(), s)
+	fmt.Fprintln(r.stdout(), s)
 }
 
 // handleCommand 处理斜杠命令。
