@@ -1,8 +1,12 @@
+# golangci-lint v2 配置格式
+version: "2"
+
 run:
   timeout: 5m
   go: "1.25"
 
 linters:
+  default: none
   enable:
     - errcheck
     - gosimple
@@ -16,14 +20,13 @@ linters:
     - gofmt
     - goimports
     - exhaustive
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-  revive:
-    rules:
-      # 导出符号需有文档注释
-      - name: exported
+  settings:
+    errcheck:
+      check-type-assertions: true
+    revive:
+      rules:
+        # 导出符号需有文档注释
+        - name: exported
 
 issues:
   exclude-rules:
