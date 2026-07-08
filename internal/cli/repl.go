@@ -389,9 +389,22 @@ func (r *REPL) handleCommand(line string) (exit bool, agentInput string) {
 	if len(parts) == 0 {
 		return false, ""
 	}
+
+	// "/" 单独输入：显示所有命令（级联引导）
+	if parts[0] == "/" {
+		r.println(r.suggestCommands("/"))
+		return false, ""
+	}
+
 	cmd, ok := r.commands.Get(parts[0])
 	if !ok {
-		r.println(fmt.Sprintf("unknown command: %s (type /help)", parts[0]))
+		// 命令未找到：显示前缀匹配 + 近似建议
+		suggestion := r.suggestCommands(parts[0])
+		if suggestion != "" {
+			r.println(suggestion)
+		} else {
+			r.println(fmt.Sprintf("unknown command: %s (type /help for all commands)", parts[0]))
+		}
 		return false, ""
 	}
 	result := cmd.Handler(r, parts[1:])

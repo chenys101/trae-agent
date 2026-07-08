@@ -116,7 +116,7 @@ func newTestAgent(t *testing.T, model string) *agent.Agent {
 	return agent.New(&cliMockProvider{}, tool.NewRegistry(), agent.WithModel(model))
 }
 
-// TestCommand_model 验证 /model 无参数时显示实际模型名，有参数时返回 not supported 错误。
+// TestCommand_model 验证 /model 无参数显示当前模型，有参数切换模型。
 func TestCommand_model(t *testing.T) {
 	r := NewCommandRegistry()
 	cmd, ok := r.Get("/model")
@@ -132,10 +132,17 @@ func TestCommand_model(t *testing.T) {
 		t.Errorf("expected model name in message, got: %s", result.Message)
 	}
 
-	// 有参数：返回 not supported 错误
+	// 有参数：切换模型
 	result = cmd.Handler(repl, []string{"gpt-4"})
-	if !strings.Contains(result.Message, "not supported") {
-		t.Errorf("expected 'not supported' in message, got: %s", result.Message)
+	if !strings.Contains(result.Message, "model switched") {
+		t.Errorf("expected 'model switched' in message, got: %s", result.Message)
+	}
+	if !strings.Contains(result.Message, "gpt-4") {
+		t.Errorf("expected new model name in message, got: %s", result.Message)
+	}
+	// 验证 agent 的模型已实际切换
+	if repl.agent.Model() != "gpt-4" {
+		t.Errorf("agent model not switched, got: %s", repl.agent.Model())
 	}
 }
 
@@ -166,7 +173,7 @@ func TestCommand_sessions_empty(t *testing.T) {
 	}
 }
 
-// TestCommand_resume_noArgs 验证 /resume 无参数时返回错误提示。
+// TestCommand_resume_noArgs 验证 /resume 无参数时列出可用 session。
 func TestCommand_resume_noArgs(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "sessions")
 	store, err := session.NewStoreWithDir(dir)
@@ -177,8 +184,9 @@ func TestCommand_resume_noArgs(t *testing.T) {
 	cmd, _ := r.Get("/resume")
 	repl := &REPL{commands: r, store: store}
 	result := cmd.Handler(repl, nil)
-	if !strings.Contains(result.Message, "usage:") {
-		t.Errorf("expected usage hint, got: %s", result.Message)
+	// 无 session 时应提示 "no saved sessions to resume"
+	if !strings.Contains(result.Message, "no saved sessions to resume") {
+		t.Errorf("expected 'no saved sessions to resume', got: %s", result.Message)
 	}
 }
 

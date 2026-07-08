@@ -82,25 +82,74 @@ func (r *CommandRegistry) List() []*Command {
 // Completer 返回 readline 补全器。
 // 构造 []PrefixCompleterInterface 后一次性传入 NewPrefixCompleter，
 // 避免直接操作返回值的内部 Children 字段。
+// 补全器不仅包含命令名，还包含带参数提示的子命令（如 /permissions clear）。
 func (r *CommandRegistry) Completer() *readline.PrefixCompleter {
 	items := make([]readline.PrefixCompleterInterface, 0, len(r.order))
 	for _, cmd := range r.List() {
-		items = append(items, readline.PcItem(cmd.Name))
+		// 有子命令的命令注册子补全项
+		if subs := r.subCommands(cmd.Name); len(subs) > 0 {
+			subItems := make([]readline.PrefixCompleterInterface, 0, len(subs))
+			for _, sub := range subs {
+				subItems = append(subItems, readline.PcItem(sub))
+			}
+			items = append(items, readline.PcItem(cmd.Name, subItems...))
+		} else {
+			items = append(items, readline.PcItem(cmd.Name))
+		}
 	}
 	return readline.NewPrefixCompleter(items...)
+}
+
+// subCommands 返回命令的已知子命令（用于 Tab 补全）。
+// 目前仅内置命令有子命令，自定义命令无子命令。
+func (r *CommandRegistry) subCommands(name string) []string {
+	switch name {
+	case "/permissions":
+		return []string{"clear"}
+	case "/model":
+		// /model 后可跟模型名，但模型名动态，仅补全空提示
+		return nil
+	default:
+		return nil
+	}
 }
 
 func (r *CommandRegistry) registerBuiltin() {
 	r.Register(&Command{
 		Name:        "/help",
 		Description: "Show available commands",
-		Usage:       "/help",
+		Usage:       "/help [command-name]",
 		Handler: func(repl *REPL, args []string) CommandResult {
-			var b strings.Builder
-			b.WriteString("Available commands:\n")
-			for _, cmd := range r.List() {
-				fmt.Fprintf(&b, "  %-12s %s\n", cmd.Name, cmd.Description)
+			// /help <command>：显示指定命令的详细用法
+			if len(args) > 0 {
+				target := args[0]
+				if !strings.HasPrefix(target, "/") {
+					target = "/" + target
+				}
+				cmd, ok := r.Get(target)
+				if !ok {
+					return CommandResult{Message: fmt.Sprintf("unknown command: %s", target)}
+				}
+				return CommandResult{Message: fmt.Sprintf("  %s\n    %s\n    usage: %s",
+					cmd.Name, cmd.Description, cmd.Usage)}
 			}
+			// /help：列出所有命令，含 usage
+			var b strings.Builder
+			b.WriteString("Available commands (type /<name> to use, Tab to autocomplete):\n")
+			// 计算最长命令名用于对齐
+			maxLen := 0
+			for _, cmd := range r.List() {
+				if len(cmd.Name) > maxLen {
+					maxLen = len(cmd.Name)
+				}
+			}
+			for _, cmd := range r.List() {
+				fmt.Fprintf(&b, "  %-*s  %s\n", maxLen, cmd.Name, cmd.Description)
+			}
+			b.WriteString("\nTips:\n")
+			b.WriteString("  - Type / and press Enter to see all commands\n")
+			b.WriteString("  - Type /<partial> and press Enter to see matching commands\n")
+			b.WriteString("  - Press Tab to autocomplete command names\n")
 			return CommandResult{Message: b.String()}
 		},
 	})
@@ -162,13 +211,21 @@ func (r *CommandRegistry) registerBuiltin() {
 	})
 	r.Register(&Command{
 		Name:        "/model",
-		Description: "Show current model (switching not supported in M3)",
-		Usage:       "/model",
+		Description: "Show or switch current model (usage: /model [model-name])",
+		Usage:       "/model [model-name]",
 		Handler: func(repl *REPL, args []string) CommandResult {
-			if len(args) > 0 {
-				return CommandResult{Message: "error: model switching not supported, use --model flag at startup"}
+			// 无参数：显示当前模型
+			if len(args) == 0 {
+				return CommandResult{Message: fmt.Sprintf("current model: %s", repl.agent.Model())}
 			}
-			return CommandResult{Message: fmt.Sprintf("current model: %s", repl.agent.Model())}
+			// 有参数：切换模型
+			newModel := strings.TrimSpace(args[0])
+			if newModel == "" {
+				return CommandResult{Message: "usage: /model [model-name] (empty name)"}
+			}
+			oldModel := repl.agent.Model()
+			repl.agent.SetModel(newModel)
+			return CommandResult{Message: fmt.Sprintf("model switched: %s → %s", oldModel, newModel)}
 		},
 	})
 	r.Register(&Command{
@@ -221,8 +278,25 @@ func (r *CommandRegistry) registerBuiltin() {
 			if repl.store == nil {
 				return CommandResult{Message: "session store unavailable"}
 			}
+			// 无参数：列出可用 session 供选择
 			if len(args) == 0 {
-				return CommandResult{Message: "usage: /resume <session-id> (use /sessions to list)"}
+				list, err := repl.store.List()
+				if err != nil {
+					return CommandResult{Message: "list sessions: " + err.Error()}
+				}
+				if len(list) == 0 {
+					return CommandResult{Message: "no saved sessions to resume"}
+				}
+				var b strings.Builder
+				b.WriteString("Available sessions (use /resume <session-id>):\n")
+				for i, s := range list {
+					if i >= 10 {
+						break
+					}
+					fmt.Fprintf(&b, "  %s  %d msgs  %s\n",
+						s.ID, len(s.Messages), s.UpdatedAt.Format("2006-01-02 15:04"))
+				}
+				return CommandResult{Message: b.String()}
 			}
 			sess, err := repl.store.Load(args[0])
 			if err != nil {

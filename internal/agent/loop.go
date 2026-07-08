@@ -112,6 +112,12 @@ func (a *Agent) Model() string {
 	return a.model
 }
 
+// SetModel 运行时切换模型。供 /model 命令调用。
+// 切换后下一次请求即使用新模型。
+func (a *Agent) SetModel(m string) {
+	a.model = m
+}
+
 // Run 执行 agent 循环（单轮，无历史保留）。
 func (a *Agent) Run(ctx context.Context, userInput string, events chan<- Event) error {
 	messages := []llm.Message{
