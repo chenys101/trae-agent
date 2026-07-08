@@ -227,12 +227,7 @@ func (r *REPL) Run(ctx context.Context) error {
 			// 说明 readline 与终端不兼容（如 Git Bash/mintty），降级到 scanner。
 			// 测试环境（realTTY=false）不触发 fallback，直接退出。
 			if readCount == 0 && r.scanner == nil && r.rl != nil && realTTY {
-				r.println("\n[当前终端与 readline 不兼容（常见于 Git Bash/mintty），已切换到简化输入模式]")
-				r.println("[提示：行编辑/历史/补全不可用，但对话功能正常。]")
-				r.println("[修复方案：]")
-				r.println("  1. 推荐：使用 Windows Terminal 或 cmd 运行 trae interactive")
-				r.println("  2. Git Bash：安装 winpty 后运行 winpty trae interactive")
-				r.println("  3. 当前会话可直接输入对话，斜杠命令 / + Enter 查看所有命令")
+				r.println("[已切换到简化输入模式，输入 / + Enter 查看命令]")
 				r.initScannerFallback()
 				continue
 			}
