@@ -100,8 +100,11 @@ func (r *REPL) stdout() io.Writer {
 // 返回的 err 为 io.EOF 表示用户结束输入。
 func (r *REPL) readLine() (string, error) {
 	if r.scanner != nil {
-		// fallback 模式：先打印提示符，再扫描一行
-		fmt.Fprint(r.stdout(), "trae> ")
+		// fallback 模式：提示符输出到 stderr（无缓冲，mintty 下立即可见），
+		// 对话内容仍由 println 输出到 stdout。
+		// 不用 stdout() 是因为 stdout 在 mintty/管道下是行缓冲的，
+		// "trae> " 无换行符不会刷新，用户看不到提示符。
+		fmt.Fprint(os.Stderr, "trae> ")
 		if !r.scanner.Scan() {
 			if err := r.scanner.Err(); err != nil {
 				return "", err
@@ -118,7 +121,9 @@ func (r *REPL) Ask(ctx context.Context, tool, args, reason string) permission.Ac
 	r.askMu.Lock()
 	defer r.askMu.Unlock()
 
-	out := r.stdout()
+	// 用 stderr 输出交互提示：无缓冲，mintty/管道下立即可见，
+	// 且不会与 agent 的 stdout 输出交错。
+	out := os.Stderr
 	fmt.Fprintf(out, "\n\033[33m[permission]\033[0m tool=%s\n", tool)
 	fmt.Fprintf(out, "  reason: %s\n", reason)
 	if len(args) > consts.ArgsDisplayLimit {
@@ -279,7 +284,8 @@ func (r *REPL) initScannerFallback() {
 	r.scanner = bufio.NewScanner(os.Stdin)
 	// 增大 buffer，支持长输入
 	r.scanner.Buffer(make([]byte, 0, consts.ScannerInitialBuf), consts.ScannerMaxBuf)
-	r.out = os.Stdout
+	// r.out 保持 os.Stdout（用于 println 输出对话内容）
+	// 提示符在 readLine 中直接输出到 os.Stderr（无缓冲，mintty 下立即可见）
 }
 
 func (r *REPL) runAgent(ctx context.Context, userInput string, interrupter *InterruptHandler) {
